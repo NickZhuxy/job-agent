@@ -36,7 +36,7 @@ The agent keeps each site password in the macOS Keychain. It gets verification c
 | Rule engine and Playwright form fill | Available |
 | Readback of page values | Available |
 | Login and verification codes | Planned |
-| Model for fields that have no rule | Planned |
+| Model for fields that have no rule | Available. Tested with a scripted model only. |
 | Job list and resume selection | Planned |
 
 ## Run the form fill
@@ -73,6 +73,58 @@ Procedure:
 6. Complete the form in Chrome and submit it.
 
 7. Close Chrome.
+
+## Use a model
+
+The model completes required fields that have no rule. It gets the field labels, the field options, the first part of the page text, and the `model_context` section of your profile.
+
+The agent does not send sensitive questions or the other profile values to the model.
+
+Prerequisites:
+
+- An API key, or a local model server
+- Your data in the `model_context` section of `profile.local.json`
+
+Procedure:
+
+1. Set the model configuration. Use one of these two configurations:
+
+   - Claude:
+
+     ```bash
+     export ANTHROPIC_API_KEY="<your-key>"
+     ```
+
+   - A server that uses the OpenAI chat completions API:
+
+     ```bash
+     export JOB_AGENT_PROVIDER="openai-compatible"
+     export JOB_AGENT_BASE_URL="<server-url>"
+     export JOB_AGENT_MODEL="<model-name>"
+     export JOB_AGENT_API_KEY="<your-key>"
+     ```
+
+2. Fill a form with the `--model` option:
+
+   ```bash
+   node src/fill.mjs "<form-url>" profile.local.json path/to/resume.pdf --model
+   ```
+
+3. Examine each draft in the terminal. Accept, edit, revise, or skip the draft.
+
+4. Complete the form in Chrome and submit it.
+
+To use a different Claude model, set `JOB_AGENT_MODEL`. The default model is `claude-sonnet-5-5`.
+
+The agent writes a model answer that has options only if the answer matches one option exactly. The agent saves the drafts that you approve in `profile.local.json`.
+
+## Test
+
+Run the tests:
+
+```bash
+npm test
+```
 
 ## Documents
 

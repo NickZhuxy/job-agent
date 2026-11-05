@@ -6,6 +6,10 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.6.0",
     "playwright-core": "^1.65.0"
+  },
+  "scripts": {
+    "test": "node --test"
   }
 }
