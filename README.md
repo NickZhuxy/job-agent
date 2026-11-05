@@ -36,7 +36,7 @@ The agent keeps each site password in the macOS Keychain. It gets verification c
 | Rule engine and Playwright form fill | Available |
 | Readback of page values | Available |
 | Login and verification codes | Planned |
-| Model for fields that have no rule | Available. Tested with a scripted model only. |
+| Model for fields that have no rule | Available. Tested with `claude-sonnet-5-5` on one real form. The OpenAI-compatible option is tested with a local test server only. |
 | Job list and resume selection | Planned |
 
 ## Run the form fill
