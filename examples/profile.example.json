@@ -32,5 +32,19 @@
   "technical project": "I built a small simulation service that replays recorded sensor logs to test a path planner offline. It runs replays in parallel, compares each result with a known baseline, and flags regressions before a merge. The hardest part was making results deterministic across machines. After I fixed random seeds and timing dependencies, the test suite became trusted, and our team caught planning bugs much earlier."
  },
  "country_pick": "United States",
- "eeo": "decline"
+ "eeo": "decline",
+ "model_context": {
+  "summary": "Master's student in computer science who builds backend and machine learning systems.",
+  "experience": [
+   "Built a simulation service that replays sensor logs to test a path planner."
+  ],
+  "skills": [
+   "Python",
+   "TypeScript",
+   "distributed systems"
+  ],
+  "preferred_locations": [
+   "New York"
+  ]
+ }
 }

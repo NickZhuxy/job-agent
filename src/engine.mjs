@@ -12,6 +12,10 @@ export const RULES = [
   [/start date/i, 'start_date'], [/how did you (hear|connect)/i, 'referral'], [/(ever )?worked (for|at)/i, 'worked_here_before'],
   [/gender|hispanic|latino|race|ethnic|veteran|disability/i, '__decline'],
 ];
+// Contact fields use short labels. A long sentence that contains "email" is a question, not an email field.
+const SHORT_LABEL_ONLY = new Set(['first_name', 'last_name', 'email', 'phone', 'location', 'linkedin', 'github', 'website']);
+const MAX_SHORT_LABEL = 40;
+const findRule = label => RULES.find(([re, key]) => re.test(label) && !(SHORT_LABEL_ONLY.has(key) && label.length > MAX_SHORT_LABEL));
 export async function scan(page) {
   return page.evaluate(() => {
     const clean = s => (s || '').replace(/\s+/g, ' ').replace(/\*/g, '').trim();
@@ -51,9 +55,10 @@ const pickOption = (opts, want, label) => {
   for (const w of [].concat(want)) { const hit = opts.filter(o => o.toLowerCase() === String(w).toLowerCase()); if (hit.length === 1) return hit[0]; }
   return null; // exact and unique only: never guess
 };
+const comboMenu = page => page.locator('[role=listbox]:visible [role=option], .select__menu .select__option');
 async function fillCombo(page, loc, want, pick) {
   await loc.scrollIntoViewIfNeeded(); await loc.click();
-  const menu = () => page.locator('[role=listbox]:visible [role=option], .select__menu .select__option');
+  const menu = () => comboMenu(page);
   const typed = want !== '__decline' && (pick || Array.isArray(want) === false);
   if (typed) await loc.pressSequentially(String(pick ? want : want), { delay: 5 });
   await page.waitForTimeout(typed ? 450 : 120);
@@ -66,8 +71,26 @@ async function fillCombo(page, loc, want, pick) {
   await page.waitForTimeout(40);
   return { ok: true, value };
 }
-export async function run(page, profile, { resume } = {}) {
-  const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], checks: [], readback_failed: [] }, seen = new Set();
+// Lists the options of a combobox. The list is empty if the field loads options only after typing.
+export async function comboOptions(page, id) {
+  const loc = page.locator(`[data-agent-field="${id}"]`);
+  await loc.scrollIntoViewIfNeeded(); await loc.click();
+  for (let i = 0; i < 8 && await comboMenu(page).count() === 0; i++) await page.waitForTimeout(100);
+  const opts = (await comboMenu(page).allInnerTexts()).map(s => s.replace(/\s+/g, ' ').trim());
+  await page.keyboard.press('Escape');
+  return opts;
+}
+// Writes one value that is already validated. Returns the written value, or null if the page did not accept it.
+export async function writeField(page, field, value) {
+  const loc = page.locator(`[data-agent-field="${field.id}"]`);
+  if (field.kind === 'select') { await loc.selectOption({ label: value }); return value; }
+  if (field.kind === 'radio') { await page.locator(`input[type=radio][name="${field.name}"][value="${value}"]`).check(); return value; }
+  if (field.kind === 'combobox') { const r = await fillCombo(page, loc, value); return r.ok ? r.value : null; }
+  await loc.fill(value);
+  return value;
+}
+export async function run(page, profile, { resume, seen = new Set() } = {}) {
+  const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], checks: [], readback_failed: [] };
   // Fields can appear after earlier answers, so scan again until no new field shows up.
   for (let pass = 0; pass < 4; pass++) {
    const fields = (await scan(page)).filter(f => !seen.has(f.kind + '|' + f.label + '|' + f.name));
@@ -76,10 +99,10 @@ export async function run(page, profile, { resume } = {}) {
    for (const f of fields) {
     seen.add(f.kind + '|' + f.label + '|' + f.name);
     const loc = page.locator(`[data-agent-field="${f.id}"]`);
-    const rule = RULES.find(([re]) => re.test(f.label));
+    const rule = findRule(f.label);
     const key = rule ? rule[1] : undefined;
     const log = v => { report.filled.push(`${f.label.slice(0, 40)} = ${String(v).slice(0, 40)}`); report.checks.push({ id: f.id, kind: f.kind, label: f.label, value: String(v) }); };
-    const review = why => report.review.push({ label: f.label.slice(0, 80), kind: f.kind, required: f.required, why, opts: f.opts?.slice(0, 8) });
+    const review = why => report.review.push({ id: f.id, name: f.name, label: f.label.slice(0, 300), kind: f.kind, required: f.required, why, opts: f.opts });
     if (f.kind === 'textarea') {
       const hit = Object.entries(profile.answers || {}).find(([k]) => f.label.toLowerCase().includes(k));
       if (hit) { await loc.fill(hit[1]); log('(saved answer)'); } else review('needs_llm_or_human');
@@ -109,8 +132,13 @@ export async function run(page, profile, { resume } = {}) {
    }
   }
   // Readback is the verdict: a field counts as filled only if the page still shows the value after settling.
+  report.readback_failed = await verifyChecks(page, report.checks);
+  return report;
+}
+export async function verifyChecks(page, checks) {
+  const failed = [];
   await page.waitForTimeout(150);
-  for (const c of report.checks) {
+  for (const c of checks) {
     if (c.kind === 'file' || c.kind === 'radio' || c.kind === 'checkbox') continue;
     const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate(el => {
       const box = el.closest('.select__control, .select'); const single = box?.querySelector('.select__single-value');
@@ -118,8 +146,9 @@ export async function run(page, profile, { resume } = {}) {
       if (el.tagName === 'SELECT') return el.options[el.selectedIndex]?.text;
       return el.value; }).catch(() => '(missing)');
     const norm = s => String(s).replace(/\D/g, '');
-    const ok = got === c.value || (c.value.startsWith('(saved') && got) || (norm(c.value) && norm(got) === norm(c.value)) || got.trim() === c.value.split(' +')[0];
-    if (!ok) report.readback_failed.push(`${c.label.slice(0, 30)}: got "${String(got).slice(0, 30)}"`);
+    const text = String(got ?? '');
+    const ok = got === c.value || (c.value.startsWith('(saved') && text) || (norm(c.value) && norm(text) === norm(c.value)) || text.trim() === c.value.split(' +')[0];
+    if (!ok) failed.push(`${c.label.slice(0, 30)}: got "${text.slice(0, 30)}"`);
   }
-  return report;
+  return failed;
 }

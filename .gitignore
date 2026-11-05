@@ -8,3 +8,6 @@ profile.local.json
 # Local material
 bench/
 docs/sketch/
+
+# API keys
+.env.local
