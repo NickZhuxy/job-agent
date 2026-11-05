@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.claude/
+
+# Personal data
+profile.local.json
+
+# Local material
+bench/
+docs/sketch/

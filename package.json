@@ -1,0 +1,11 @@
+{
+  "name": "job-agent",
+  "version": "0.1.0",
+  "description": "An application agent that uses rules, a model, and Playwright.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "playwright-core": "^1.65.0"
+  }
+}

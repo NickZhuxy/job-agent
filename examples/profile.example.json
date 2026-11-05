@@ -1,0 +1,36 @@
+{
+ "_note": "Example data. Copy this file to profile.local.json and enter your values.",
+ "first_name": "Alex",
+ "last_name": "Rivera",
+ "email": "alex.rivera@example.com",
+ "phone": "2125550142",
+ "country": "United States",
+ "location": "New York",
+ "location_pick": "New York",
+ "linkedin": "https://www.linkedin.com/in/alex-rivera-test",
+ "github": "https://github.com/alex-rivera-test",
+ "website": "https://alex-rivera.example.com",
+ "school": "Columbia",
+ "school_pick": "Columbia University",
+ "degree": "Master's",
+ "discipline": "Computer Science",
+ "grad_month": "December",
+ "grad_year": "2027",
+ "grad_term": "Fall 2027",
+ "gpa": "3.8",
+ "authorized": "Yes",
+ "sponsorship": "Yes",
+ "visa_type": "F-1",
+ "start_date": "2027-06-01",
+ "referral": [
+  "LinkedIn",
+  "Other"
+ ],
+ "worked_here_before": "No",
+ "answers": {
+  "why do you want to work at": "Example Robotics builds autonomous systems where software decisions meet physical constraints, which is the kind of problem I enjoy most. I want to learn how production robotics teams test reliability before code reaches real machines. My coursework in distributed systems and machine learning has prepared me to contribute quickly, and I am excited to grow alongside engineers who care about safety and careful measurement.",
+  "technical project": "I built a small simulation service that replays recorded sensor logs to test a path planner offline. It runs replays in parallel, compares each result with a known baseline, and flags regressions before a merge. The hardest part was making results deterministic across machines. After I fixed random seeds and timing dependencies, the test suite became trusted, and our team caught planning bugs much earlier."
+ },
+ "country_pick": "United States",
+ "eeo": "decline"
+}
