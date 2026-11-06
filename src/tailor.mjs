@@ -51,9 +51,9 @@ export function tailorCommand(tailor) {
   ];
 }
 
-function runTool(command, { cwd, env, timeoutMs }) {
+function runTool(command, { cwd, env, timeoutMs, signal }) {
   return new Promise(resolve => {
-    const child = spawn(command[0], command.slice(1), { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command[0], command.slice(1), { cwd, env, signal, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     const keep = chunk => { output = (output + chunk).slice(-20000); };
     child.stdout.on('data', keep);
@@ -80,7 +80,7 @@ export function noteTail(output, limit = 4000) {
 }
 
 // Returns { path, folder, name, notes, seconds } or { error }.
-export async function tailorResume(profile, { jobText, url, company, role }, { env = process.env } = {}) {
+export async function tailorResume(profile, { jobText, url, company, role }, { env = process.env, signal } = {}) {
   const library = profile.resume_library ?? {};
   const tailor = library.tailor;
   const root = tailor?.output_dir ?? library.roots?.find(r => r.kind === 'targeted')?.dir;
@@ -108,7 +108,7 @@ export async function tailorResume(profile, { jobText, url, company, role }, { e
   const childEnv = { ...env };
   for (const key of CHILD_ENV_REMOVE) delete childEnv[key];
   const started = Date.now();
-  const result = await runTool(command, { cwd: folder, env: childEnv, timeoutMs: (tailor.timeout_minutes ?? 15) * 60000 });
+  const result = await runTool(command, { cwd: folder, env: childEnv, timeoutMs: (tailor.timeout_minutes ?? 15) * 60000, signal });
   fs.writeFileSync(path.join(folder, 'tailor.log'), result.output);
 
   const seconds = Math.round((Date.now() - started) / 1000);

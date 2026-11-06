@@ -6,6 +6,8 @@
 
 通过 Discord 或 Telegram 给 agent 发消息，让它在我的个人电脑上操作。
 
+Discord 的第一版已经完成，见 README 的“用 Discord 控制 Agent”。它只支持我主动发起的单次投递，CAPTCHA 要回到电脑前处理。下面的每日定时和 Telegram 还没有做。
+
 设想的用法：
 
 - **随手投递：** 在地铁上看到一个 job description，直接发给 agent，由它帮我投递。

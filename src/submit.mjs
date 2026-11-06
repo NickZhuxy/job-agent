@@ -69,7 +69,7 @@ export async function submitApplication(page, report, { say = () => {}, canWait 
     if (CONFIRMED.test(text) && formGone) return { submitted: true, url: page.url() };
     if (await challengeVisible(page) || CODE_REQUEST.test(text)) {
       if (!canWait) return { submitted: false, why: 'needs_user_check' };
-      if (!told) say('The page asks for a CAPTCHA or a verification code. Complete it in Chrome. The agent waits.');
+      if (!told) say(`The page asks for a CAPTCHA or a verification code. Complete it in Chrome on the computer that runs the agent. The agent waits for ${Math.round(userWaitMs / 60000)} minutes.`);
       told = true;
       continue;
     }

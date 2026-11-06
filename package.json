@@ -13,5 +13,8 @@
   },
   "scripts": {
     "test": "node --test"
+  },
+  "optionalDependencies": {
+    "discord.js": "^14.28.1"
   }
 }

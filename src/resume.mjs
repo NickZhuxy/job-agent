@@ -100,7 +100,7 @@ async function runTailoring(profile, job, options) {
 }
 
 // Tailoring starts by itself. The upload does not: Greenhouse, for example, uploads a file as soon as it is attached.
-export async function chooseResume(page, profile, { provider, confirmResume, onTailor, env } = {}) {
+export async function chooseResume(page, profile, { provider, confirmResume, onTailor, env, signal } = {}) {
   const result = { path: null, source: 'none', tailor_recommended: false, reason: '', candidates: 0, usage: null, error: null, tailored: null, tailor_error: null };
   const library = profile.resume_library;
   if (!library || !confirmResume) return result;
@@ -129,7 +129,7 @@ export async function chooseResume(page, profile, { provider, confirmResume, onT
   let tailored = null;
   if (selection.tailorRecommended && library.tailor) {
     onTailor?.({ company: selection.company, role: selection.role });
-    tailored = await runTailoring(profile, { jobText: pageText.slice(0, 30000), url: page.url(), company: selection.company, role: selection.role }, { env });
+    tailored = await runTailoring(profile, { jobText: pageText.slice(0, 30000), url: page.url(), company: selection.company, role: selection.role }, { env, signal });
     if (tailored.error) {
       result.tailor_error = tailored.error;
       tailored = null;

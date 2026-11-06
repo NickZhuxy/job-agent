@@ -43,6 +43,7 @@ The login design keeps each site password in the macOS Keychain and gets verific
 | Model for fields that have no rule | Available. Tested with `claude-sonnet-5-5` on one real form. The OpenAI-compatible option is tested with a local test server only. |
 | Resume selection and upload | Available. Selection is tested with `claude-sonnet-5-5`. Upload is tested on local forms only. |
 | Automatic tailoring (optional) | Available for Claude Code only. Tested with one real job page. |
+| Discord remote control (optional) | Available. Tested with fake Discord objects and local forms only. |
 | Login and verification codes | Planned |
 | Job list and tracker | Planned |
 
@@ -272,6 +273,102 @@ Limits for each run:
 If tailoring fails, the agent shows the error and recommends a resume from your library.
 
 To remove this function from the code, delete `src/tailor.mjs` and `test/tailor.test.mjs`. The other steps do not use these files.
+
+## Control the agent from Discord (optional)
+
+Use this function to start an application from your phone. The agent runs on your computer, and Discord carries the messages. If you do not use this function, the other steps stay the same.
+
+Prerequisites:
+
+- Node.js 20.12 or later
+- A completed setup. You must run `node src/setup.mjs` on the computer, because the bot does not start the setup.
+- The computer stays on and has a network connection.
+
+### Set up the bot
+
+Do these steps one time. Do not send the token to a person or a chat. Each person who has the token can control the bot account.
+
+1. Open the [Discord Developer Portal](https://discord.com/developers/applications). Create an application.
+2. On the **Installation** page, set **Install Link** to **None**. Save the change.
+3. On the **Bot** page, clear **Public Bot**. Other people then cannot add your bot to a server.
+4. On the **Bot** page, reset the token and copy it. You do not need to enable a privileged intent.
+5. In Discord, create a server for yourself only. Discord shows the commands of a bot in a direct message only if you and the bot are in the same server.
+6. On the **OAuth2** page, open the URL generator. Select the `bot` and `applications.commands` scopes. Select no permissions. Open the URL and add the bot to your server.
+7. In Discord, enable **Developer Mode** in **Advanced** settings. Open your profile and copy your user ID.
+8. Make a file with the name `.env.local` in the project folder. Git ignores this file.
+
+   ```text
+   DISCORD_BOT_TOKEN=<your-token>
+   DISCORD_OWNER_ID=<your-user-id>
+   ```
+
+9. Limit the file to your user account:
+
+   ```bash
+   chmod 600 .env.local
+   ```
+
+10. Install the dependencies. This step also installs `discord.js`.
+
+    ```bash
+    npm install
+    ```
+
+### Start the bot
+
+1. Start the bot. The `caffeinate` command stops the Mac from going to sleep while the bot runs.
+
+   ```bash
+   caffeinate -i node src/discord.mjs --model
+   ```
+
+   The command also accepts a profile path and the `--no-submit` option.
+
+2. In Discord, open a direct message with the bot from the member list of your server.
+
+### Use the commands
+
+The commands operate only in the direct message.
+
+| Command | Function |
+| --- | --- |
+| `/apply url:<form-url>` | Starts an application. If a job runs, the new job waits in a queue, and the bot tells you. |
+| `/status` | Shows the current job, its step, the open question, and the queue. |
+| `/cancel` | Stops the current job. Chrome closes for that job. Use `/cancel job:<number>` to remove a job from the queue. |
+
+Jobs run one at a time. The bot asks each question that the terminal asks. Reply in a normal message:
+
+- **Resume:** The bot sends the recommendation. If the agent made a tailored resume, the bot also sends the PDF and the notes. Reply with `a`, a resume id, `p`, or `s`.
+- **Draft:** Reply with `a`, `e`, `r`, or `s`.
+- **New question:** Reply with your answer or the number of an option. To complete the field later in Chrome, reply with `-`.
+
+At the end, the bot sends the same summary as the terminal.
+
+These steps need the computer:
+
+- **CAPTCHA or verification code:** The bot tells you to go to the computer. The agent waits for 10 minutes, then reports that it found no confirmation.
+- **Form that the agent did not submit:** The form stays open in Chrome, and the next job starts. If the bot stops, Chrome closes.
+
+You cannot cancel a job at the submission step. The queue is in memory. If the bot stops, the queue and the current job stop.
+
+The bot does not start a URL again if the agent clicked its submit button in this run, or if the URL is in `applications.local.csv`. To apply again, use the terminal.
+
+### Data that goes to Discord
+
+Discord stores the messages and the files. Discord messages do not have end-to-end encryption. This data goes to Discord:
+
+- The job URLs, the company and role names, and the error messages
+- The names of your resume files and folders, and the reason for the recommendation
+- The tailored PDF and its notes. The PDF contains your contact data. The other resumes stay on the computer.
+- The new questions from forms, their options, and your replies
+- The model drafts and your changes
+- The summary: the result, the resume name, the labels of the fields not filled or skipped, and the answers from you and from the model
+
+The other values from your profile do not go to Discord. If the page changes a value, the summary names the field and does not show the value. The bot hides each line that names a password or a social security number, and each value with the format of a social security number.
+
+The bot accepts commands and replies only from the user ID in `DISCORD_OWNER_ID`, and only in the direct message. It ignores all other users and servers. Text from a job page is data. It cannot start a command or answer a question. Chrome and the tailoring tool do not get the token.
+
+To remove this function from the code, delete `src/discord.mjs` and `test/discord.test.mjs`, then run `npm uninstall discord.js`. The other steps do not use these files.
 
 ## Test
 
