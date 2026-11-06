@@ -94,6 +94,46 @@ Agent 分为三层。Playwright 是操作浏览器的程序库。CAPTCHA 是识�
 
 工作授权、签证担保、签证类型和人口统计问题，设置程序总是直接问你，不从文档中提取。
 
+### 添加本科学历
+
+设置程序只收集当前学校。要提供本科学历，把下面的键加到 `profile.local.json`。值要使用表格里的选项文字：
+
+```json
+"undergraduate": {
+  "school": "State University",
+  "degree": "Bachelor's Degree",
+  "discipline": "Computer Science",
+  "disciplines": ["Mathematics", "Computer Science"],
+  "edu_start_month": "August",
+  "edu_start_year": "2019",
+  "grad_month": "May",
+  "grad_year": "2023"
+}
+```
+
+Agent 在两种情况下使用这些值：
+
+- 表格的教育部分有 “Add another” 按钮（Greenhouse）。Agent 添加第二组教育信息并填写。如果某个值没有完全一致的选项，这个字段留给你填，Agent 不提交表格。
+- 问题中包含 “undergraduate” 或 “bachelor”。
+
+如果表格要求列出上过的所有学校，Agent 不回答，它会问你。
+
+### 说明从哪里知道这个职位
+
+把 `referral` 设为来源列表，例如 `["LinkedIn", "Other"]`。对于 “How did you hear about this job?” 这个问题，Agent 按下面的顺序选择第一个匹配的选项：
+
+1. 列表中的第一个来源。
+2. 招聘网站或公司网站。招聘会不算网站。
+3. 求职网站。
+4. 列表中的其他来源。
+5. 你之前对同一问题的回答。
+
+如果没有匹配的选项，并且问题是必答题，Agent 会问你。模型不回答这个问题。
+
+### 可以选多个答案的问题
+
+必答题可以有多个复选框。Agent 会问你，你输入一个或多个编号。Agent 保存你的回答，同一问题不再问。模型不回答这类问题。
+
 ## 法律和人口统计问题
 
 设置程序会保存你对这些问题的回答。之后，Agent 按以下规则处理每份表格。
