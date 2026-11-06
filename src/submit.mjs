@@ -1,5 +1,5 @@
 // Submits a filled form, if the report shows no open problem. The agent clicks the button one time only.
-// A CAPTCHA or a verification code stays with the user.
+// A CAPTCHA stays with the user. A verification code also stays with the user, unless the optional email code module is enabled.
 const CONFIRMED = /thank you for (applying|your application)|application (has been |was )?(received|submitted)|successfully (submitted|applied)|(we.?ve|we have) received your application/i;
 const CHALLENGE_FRAMES = 'iframe[src*="recaptcha"][src*="bframe"], iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare"], iframe[title*="challenge" i]';
 const CODE_REQUEST = /(verification|security|confirmation) code/i;
@@ -51,23 +51,46 @@ const challengeVisible = async page => {
   return false;
 };
 
-export async function submitApplication(page, report, { say = () => {}, canWait = true, userWaitMs = USER_WAIT_MS } = {}) {
+// The email code is an optional module, so the agent loads it only if the profile enables it.
+async function tryEmailedCode(page, profile, options) {
+  if (!profile?.email_code?.enabled) return null;
+  try {
+    const { enterEmailedCode } = await import('./emailcode.mjs');
+    return await enterEmailedCode(page, profile, options);
+  } catch (error) {
+    return { entered: false, why: `The email code module is not available: ${error.message}` };
+  }
+}
+
+export async function submitApplication(page, report, { say = () => {}, canWait = true, userWaitMs = USER_WAIT_MS, profile, env } = {}) {
   const blockers = await submitBlockers(page, report);
   if (blockers.length) return { submitted: false, why: 'form_not_ready', blockers };
   const button = await findSubmitButton(page);
   if (!button) return { submitted: false, why: 'no_submit_button' };
 
   const startUrl = page.url();
+  const clickedAt = Date.now();
   await button.click();
-  const started = Date.now();
-  let told = false;
+  let started = clickedAt;
+  let told = false, codeTried = false;
   while (Date.now() - started < (told ? userWaitMs : ERROR_WAIT_MS)) {
     await page.waitForTimeout(POLL_MS);
     const text = await page.locator('body').innerText().catch(() => '');
     // Job text can also thank the reader, so the page must also change.
     const formGone = page.url() !== startUrl || !await button.isVisible().catch(() => false);
     if (CONFIRMED.test(text) && formGone) return { submitted: true, url: page.url() };
-    if (await challengeVisible(page) || CODE_REQUEST.test(text)) {
+    const challenge = await challengeVisible(page);
+    if (challenge || CODE_REQUEST.test(text)) {
+      if (!challenge && !codeTried) {
+        codeTried = true;
+        const outcome = await tryEmailedCode(page, profile, { clickedAt, env, say });
+        started = Date.now();
+        if (outcome?.entered) {
+          say('The agent entered the code from your email.');
+          continue;
+        }
+        if (outcome) say(`The agent did not enter a code from your email. ${outcome.why}`);
+      }
       if (!canWait) return { submitted: false, why: 'needs_user_check' };
       if (!told) say('The page asks for a CAPTCHA or a verification code. Complete it in Chrome. The agent waits.');
       told = true;

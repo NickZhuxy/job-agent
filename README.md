@@ -118,7 +118,7 @@ When the setup asks if the agent should sign and submit, enter `y`. The agent th
 4. It clicks the submit button one time.
 5. It looks for the confirmation on the page and records the result in the report.
 
-If the page shows a CAPTCHA or asks for a verification code, you must complete it in Chrome. The agent then continues to look for the confirmation.
+If the page shows a CAPTCHA or asks for a verification code, you must complete it in Chrome. The agent then continues to look for the confirmation. An optional module can enter an emailed code for you. See [Enter an emailed code automatically](#enter-an-emailed-code-automatically-optional).
 
 To fill a form and not submit it, use the `--no-submit` option:
 
@@ -272,6 +272,63 @@ Limits for each run:
 If tailoring fails, the agent shows the error and recommends a resume from your library.
 
 To remove this function from the code, delete `src/tailor.mjs` and `test/tailor.test.mjs`. The other steps do not use these files.
+
+## Enter an emailed code automatically (optional)
+
+Some job platforms send a verification code to your email after you click submit. This module reads that code from your Gmail mailbox and enters it in the form. It works with Greenhouse only.
+
+The module does not solve a CAPTCHA. A CAPTCHA stays with you.
+
+If you do not use this module, all the other steps stay the same. You enter the code in Chrome.
+
+Prerequisites:
+
+- [Claude Code](https://claude.com/claude-code), with a login
+- The Gmail connector in your Claude account
+- The application email must arrive in the Gmail mailbox of that connector. To find this mailbox, read the address in the connector settings. If you apply with a different address, forward the mail of the job platform to this mailbox.
+
+Procedure:
+
+1. Open `profile.local.json`.
+
+2. Add this setting:
+
+   ```json
+   "email_code": { "enabled": true }
+   ```
+
+3. Submit one application with the `auto_submit` setting on, and stay at the computer:
+
+   ```bash
+   node src/fill.mjs "<form-url>" --model
+   ```
+
+4. Read the terminal. It tells you if the agent entered the code.
+
+The agent waits for the code for 120 seconds. To change this time, set `wait_seconds` in `email_code`.
+
+What the agent does when the page asks for a code:
+
+1. It starts Claude Code, which searches for mail from the job platform that arrived after the submit click.
+2. It examines the result. It rejects the result if any of these conditions is true:
+   - The sender is not the job platform.
+   - The mail arrived before the submit click.
+   - The code does not have the format of the platform.
+   - The code is not in the mail that the tool read.
+3. It enters the code one time and clicks the submit button again.
+
+If a step fails, the agent shows the reason and waits for you to complete the page in Chrome. The agent does not try a code two times.
+
+Limits for each run:
+
+- Email text is untrusted, because a message can contain instructions. The program, not the model, decides if a code is correct.
+- The tool can use only two Gmail tools: search threads and get message. It has no tools to send, forward, label, or delete mail. It has no shell, file, or network tools.
+- The tool does not get the API keys from the agent. It uses its own login.
+- The agent does not save or log the code. The code is not in the report.
+- Each search stops at a cost of 0.25 USD. A usual search costs approximately 0.02 USD.
+- Run one application at a time. If two applications wait for a code, the agent can read the code of the other application.
+
+To remove this function from the code, delete `src/emailcode.mjs` and `test/emailcode.test.mjs`. The other steps do not use these files. If the `email_code` setting stays in your profile, the agent shows a message and waits for you.
 
 ## Test
 

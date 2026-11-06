@@ -82,7 +82,7 @@ prompt.close();
 if (profile.auto_submit && !noSubmit) {
   // The page changes after the submission, so the job name is read first.
   const job = describeJob(await page.evaluate(() => ({ title: document.title, heading: document.querySelector('h1')?.innerText?.trim() })), selection);
-  report.submission = await submitApplication(page, report, { say: console.log, canWait: !headless });
+  report.submission = await submitApplication(page, report, { say: console.log, canWait: !headless, profile });
   if (report.submission.submitted) report.application_log = recordApplication(APPLICATIONS_FILE, { ...job, url, resume: resumePath && path.basename(resumePath) });
 }
 console.log(`\n${showJson ? JSON.stringify(report, null, 2) : formatReport(report)}\n`);
