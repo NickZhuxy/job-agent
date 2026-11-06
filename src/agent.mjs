@@ -5,8 +5,7 @@ import { askModel, isEligible, validateAnswers } from './model.mjs';
 const MAX_ROUNDS = 3, MAX_REVISIONS = 3, JOB_TEXT_CHARS = 6000;
 const TEXT_KINDS = new Set(['text', 'textarea', 'email', 'tel', 'url', 'date', 'number']);
 
-export async function fillWithModel(page, profile, { resume, provider, confirm, onApproved } = {}) {
-  const seen = new Set();
+export async function fillWithModel(page, profile, { resume, provider, confirm, onApproved, seen = new Set(), company } = {}) {
   const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], checks: [], readback_failed: [], model: { name: provider.name, calls: 0, input_tokens: 0, output_tokens: 0, errors: [] } };
   const addUsage = usage => { report.model.calls++; report.model.input_tokens += usage?.input_tokens ?? 0; report.model.output_tokens += usage?.output_tokens ?? 0; };
   const hold = (item, why, value) => report.review.push({ ...item, why, ...(value ? { value } : {}) });
@@ -19,7 +18,7 @@ export async function fillWithModel(page, profile, { resume, provider, confirm, 
   };
 
   for (let round = 0; round < MAX_ROUNDS; round++) {
-    const rules = await run(page, profile, { resume, seen });
+    const rules = await run(page, profile, { resume, seen, company });
     for (const key of ['filled', 'skipped', 'checks']) report[key].push(...rules[key]);
     report.total += rules.total; report.passes += rules.passes;
 

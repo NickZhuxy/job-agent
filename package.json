@@ -7,6 +7,8 @@
   "license": "MIT",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
+    "mammoth": "^1.13.0",
+    "pdf-parse": "^2.4.5",
     "playwright-core": "^1.65.0"
   },
   "scripts": {
