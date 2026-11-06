@@ -114,12 +114,40 @@ export async function scan(page) {
       if (kind === 'file') { const g = el.closest('[role=group],fieldset,.file-upload'); const t = clean((g?.innerText || '').split('\n')[0]); if (t) label = t; }
       if (kind === 'radio') {
         if (seenRadio.has(el.name)) continue; seenRadio.add(el.name);
-        label = clean(el.closest('fieldset')?.querySelector('legend')?.innerText || label);
-        opts = [...document.querySelectorAll(`input[type=radio][name="${el.name}"]`)].map(r => clean(r.labels?.[0]?.innerText));
+        const group = [...document.querySelectorAll(`input[type=radio][name="${el.name}"]`)];
+        opts = group.map(r => clean(r.labels?.[0]?.innerText));
+        const legend = clean(el.closest('fieldset')?.querySelector('legend')?.innerText);
+        // Without a legend, the label of the first input is an option. The question is the text before the group.
+        if (legend) label = legend;
+        else if (opts.includes(label)) {
+          let box = el.parentElement;
+          while (box && !group.every(r => box.contains(r))) box = box.parentElement;
+          const parts = [];
+          for (let node = box?.previousElementSibling; node && !node.querySelector('input, select, textarea'); node = node.previousElementSibling) parts.unshift(node.innerText);
+          label = clean(parts.join(' ')) || label;
+        }
       }
       if (kind === 'select') opts = [...el.options].map(o => clean(o.text)).filter(t => t && !/^select/i.test(t));
       const required = el.required || el.getAttribute('aria-required') === 'true' || /\*/.test(el.labels?.[0]?.innerText || '');
       out.push({ id, kind, label, opts, required, name: el.name });
+    }
+    // A custom dropdown is a button that controls an option list. The answer goes in a hidden input.
+    for (const button of document.querySelectorAll('form [role=button][aria-controls]')) {
+      const hidden = button.querySelector('input[type=hidden]') ?? button.parentElement?.querySelector('input[type=hidden]');
+      const list = document.getElementById(button.getAttribute('aria-controls'));
+      const options = [...(list?.querySelectorAll('li') ?? [])].map(li => clean(li.textContent));
+      if (!hidden || !options.length || hidden.value || !button.getClientRects().length) continue;
+      const id = button.getAttribute('data-agent-field') || 'f' + window.__agentFieldCount++; button.setAttribute('data-agent-field', id);
+      const before = button.parentElement.previousElementSibling?.innerText ?? '';
+      let label = clean(before.split('\n')[0]) || clean(button.getAttribute('aria-label') || hidden.name);
+      // Two short labels, such as Month and Year, can share one question that comes before the group.
+      const group = button.parentElement.parentElement?.parentElement;
+      const shared = group?.previousElementSibling;
+      const isPart = before.length <= 20 && !before.includes('*') && group?.querySelectorAll('[role=button][aria-controls]').length > 1 && shared && !shared.querySelector('input, select, textarea');
+      const question = isPart ? shared.innerText : '';
+      if (clean(question)) label = `${clean(question.split('\n')[0])} - ${label}`;
+      const required = hidden.required || hidden.classList.contains('required') || button.getAttribute('aria-required') === 'true' || before.includes('*') || question.includes('*');
+      out.push({ id, kind: 'dropdown', label, opts: options, required, name: hidden.name });
     }
     return out;
   });
@@ -136,7 +164,21 @@ function pickOption(opts, want) {
   return null; // exact and unique only: never guess
 }
 // The value attribute of a radio button is often not its label, so the position selects it.
-const checkRadio = (page, field, option) => page.locator(`input[type=radio][name="${field.name}"]`).nth(field.opts.indexOf(option)).check();
+const checkRadio = async (page, field, option) => {
+  const radio = page.locator(`input[type=radio][name="${field.name}"]`).nth(field.opts.indexOf(option));
+  // Some forms hide the input and show a styled label. Only the label can take the click.
+  if (await radio.isVisible()) await radio.check();
+  else await radio.evaluate(el => el.labels[0].click());
+};
+// The position selects the option. An option in a closed category is not visible, so only its element can take the click.
+async function selectDropdown(page, field, option) {
+  const button = page.locator(`[data-agent-field="${field.id}"]`);
+  await button.scrollIntoViewIfNeeded(); await button.click();
+  const item = page.locator(`[id="${await button.getAttribute('aria-controls')}"] li`).nth(field.opts.indexOf(option));
+  if (await item.isVisible()) await item.click(); else await item.evaluate(el => el.click());
+  const stored = await page.locator(`input[type=hidden][name="${field.name}"]`).inputValue();
+  return stored ? option : null;
+}
 const comboMenu = page => page.locator('[role=listbox]:visible [role=option], .select__menu .select__option');
 async function fillCombo(page, loc, want, pick) {
   await loc.scrollIntoViewIfNeeded(); await loc.click();
@@ -167,6 +209,7 @@ export async function writeField(page, field, value) {
   const loc = page.locator(`[data-agent-field="${field.id}"]`);
   if (field.kind === 'select') { await loc.selectOption({ label: value }); return value; }
   if (field.kind === 'radio') { await checkRadio(page, field, value); return value; }
+  if (field.kind === 'dropdown') return selectDropdown(page, field, value);
   if (field.kind === 'combobox') { const r = await fillCombo(page, loc, value); return r.ok ? r.value : null; }
   await loc.fill(value);
   return value;
@@ -207,7 +250,7 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     }
     if (key === null) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     if (key === undefined) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
-    const isChoice = ['select', 'radio', 'combobox'].includes(f.kind);
+    const isChoice = ['select', 'radio', 'combobox', 'dropdown'].includes(f.kind);
     if (YES_NO_KEYS.has(key) && (!isChoice || FOLLOW_UP.test(f.label))) { review('follow_up'); continue; }
     if (key === 'visa_type' && /need|require|sponsor/i.test(f.label)) { review('follow_up'); continue; }
     if ((key === 'authorized' || key === 'sponsorship') && !regionAllowed(f.label, profile.work_regions)) { review('region_not_configured'); continue; }
@@ -225,6 +268,9 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     } else if (f.kind === 'radio') {
       const o = pickOption(f.opts, want); if (!o) { review('no_exact_option'); continue; }
       await checkRadio(page, f, o); log(o);
+    } else if (f.kind === 'dropdown') {
+      const o = pickOption(f.opts, want); if (!o) { review('no_exact_option'); continue; }
+      if (await selectDropdown(page, f, o)) log(o); else review('write_failed');
     } else if (f.kind === 'combobox') {
       const r = await fillCombo(page, loc, want, profile[key + '_pick']);
       if (r.ok) log(r.value); else review('combobox_no_match:' + JSON.stringify(r.opts));
@@ -246,11 +292,12 @@ export async function verifyChecks(page, checks) {
       continue;
     }
     if (c.kind === 'radio' || c.kind === 'checkbox') continue;
-    const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate(el => {
+    const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate((el, kind) => {
+      if (kind === 'dropdown') return (el.querySelector('input[type=hidden]') ?? el.parentElement.querySelector('input[type=hidden]')).value;
       const box = el.closest('.select__control, .select'); const single = box?.querySelector('.select__single-value');
       if (el.getAttribute('role') === 'combobox' && single) return single.textContent;
       if (el.tagName === 'SELECT') return el.options[el.selectedIndex]?.text;
-      return el.value; }).catch(() => '(missing)');
+      return el.value; }, c.kind).catch(() => '(missing)');
     const norm = s => String(s).replace(/\D/g, '');
     const text = String(got ?? '');
     const ok = got === c.value || (c.value.startsWith('(saved') && text) || (norm(c.value) && norm(text) === norm(c.value)) || text.trim() === c.value.split(' +')[0];
