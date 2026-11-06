@@ -1,6 +1,6 @@
 // Model layer. The model returns candidate values only. Nothing here touches the browser.
 const ELIGIBLE = /^(no_rule|needs_llm_or_human|no_exact_option|combobox_no_match)/;
-const SENSITIVE = /gender|hispanic|latino|\brace\b|ethnic|veteran|disab|sponsor|visa|authori[sz]|eligible to work|citizen|criminal|convict|salary|compensation|certify|attest|consent|\bagree|password|social security|\bssn\b|date of birth|birthday/i;
+export const SENSITIVE = /gender|\bsex\b|sexual|lgbt|hispanic|latin[oax]|\brace\b|ethnic|veteran|military|disab|sponsor|visa|authori[sz]|eligible to work|citizen|criminal|convict|password|social security|\bssn\b|all (the )?(schools|colleges|universities|institutions)|(colleges?|schools?|universities|institutions) (you )?(have )?attended|transfer(red)? (from|credit|student)/i;
 const MAX_TEXT = 4000;
 
 export const ANSWER_SCHEMA = {

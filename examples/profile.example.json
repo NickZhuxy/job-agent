@@ -1,5 +1,5 @@
 {
- "_note": "Example data. Copy this file to profile.local.json and enter your values.",
+ "_note": "Example data that shows the file format. Run node src/setup.mjs to create your profile. You do not need to edit a file.",
  "first_name": "Alex",
  "last_name": "Rivera",
  "email": "alex.rivera@example.com",
@@ -18,6 +18,7 @@
  "grad_year": "2027",
  "grad_term": "Fall 2027",
  "gpa": "3.8",
+ "gpa_undergraduate": "3.6",
  "authorized": "Yes",
  "sponsorship": "Yes",
  "visa_type": "F-1",
@@ -26,13 +27,28 @@
   "LinkedIn",
   "Other"
  ],
- "worked_here_before": "No",
+ "work_regions": [
+  "United States"
+ ],
+ "past_employers": [
+  "Example Robotics"
+ ],
+ "clarified": {
+  "which visa will you need": {
+   "question": "Which visa will you need?",
+   "answer": "H-1B"
+  }
+ },
  "answers": {
   "why do you want to work at": "Example Robotics builds autonomous systems where software decisions meet physical constraints, which is the kind of problem I enjoy most. I want to learn how production robotics teams test reliability before code reaches real machines. My coursework in distributed systems and machine learning has prepared me to contribute quickly, and I am excited to grow alongside engineers who care about safety and careful measurement.",
   "technical project": "I built a small simulation service that replays recorded sensor logs to test a path planner offline. It runs replays in parallel, compares each result with a known baseline, and flags regressions before a merge. The hardest part was making results deterministic across machines. After I fixed random seeds and timing dependencies, the test suite became trusted, and our team caught planning bugs much earlier."
  },
  "country_pick": "United States",
+ "auto_submit": false,
  "eeo": "decline",
+ "eeo_fallback": {
+  "gender": "Prefer not to say"
+ },
  "model_context": {
   "summary": "Master's student in computer science who builds backend and machine learning systems.",
   "experience": [
@@ -46,5 +62,29 @@
   "preferred_locations": [
    "New York"
   ]
+ },
+ "resume_library": {
+  "roots": [
+   {
+    "dir": "/path/to/resumes/general",
+    "kind": "general"
+   },
+   {
+    "dir": "/path/to/resumes/targeted",
+    "kind": "targeted"
+   }
+  ],
+  "language": "en",
+  "name_tokens": [],
+  "tailor_policy": "Recommend tailoring for roles at companies that I name here.",
+  "tailor": {
+   "skill": "your-resume-skill",
+   "material_dirs": [
+    "/path/to/your/source/material"
+   ],
+   "skill_dirs": [
+    "/path/to/.claude/skills"
+   ]
+  }
  }
 }

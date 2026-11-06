@@ -10,8 +10,11 @@ const item = (over = {}) => ({ id: 'f1', label: 'Preferred office', kind: 'selec
 
 test('sensitive, optional, and upload fields do not go to the model', () => {
   assert.equal(isEligible(item()), true);
-  for (const label of ['Gender', 'Will you require visa sponsorship?', 'Expected salary', 'I certify that this is accurate', 'Date of birth']) {
+  for (const label of ['Gender', 'Will you require visa sponsorship?', 'Social security number', 'List all colleges you have attended']) {
     assert.equal(isEligible(item({ label })), false, label);
+  }
+  for (const label of ['Expected salary', 'Date of birth', 'Do you agree to these terms?']) {
+    assert.equal(isEligible(item({ label })), true, label);
   }
   assert.equal(isEligible(item({ required: false })), false);
   assert.equal(isEligible(item({ kind: 'file' })), false);
@@ -76,6 +79,7 @@ test('the agent writes valid choices, confirms drafts, and handles new fields', 
       if (/team/.test(field.label)) return 'Search';
       if (/language/.test(field.label)) return 'Python'; // Not an option.
       if (/Why/.test(field.label)) return request.applicant_feedback ? 'Second draft.' : 'First draft.';
+      if (/salary/.test(field.label)) return null;
       return 'alex.private@example.com'; // The injected field: a draft that the user must see.
     });
     const asked = [], saved = [];
@@ -95,7 +99,7 @@ test('the agent writes valid choices, confirms drafts, and handles new fields', 
     assert.equal(await page.inputValue('#lang'), '', 'invented option is not written');
     assert.equal(await page.inputValue('#why'), 'Second draft.', 'revised draft is written after approval');
     assert.equal(await page.inputValue('#inject'), '', 'skipped draft is not written');
-    assert.equal(await page.inputValue('#salary'), '');
+    assert.equal(await page.inputValue('#salary'), '', 'a draft for a salary question waits for the user');
     assert.equal(await page.inputValue('#gender'), '');
     assert.equal(await page.isChecked('#consent'), false);
 
@@ -105,13 +109,14 @@ test('the agent writes valid choices, confirms drafts, and handles new fields', 
 
     const why = Object.fromEntries(report.review.map(r => [r.label.slice(0, 12), r.why]));
     assert.equal(why['Main languag'], 'model_option_not_exact');
-    assert.equal(why['Expected sal'], 'no_rule');
+    assert.equal(why['Expected sal'], 'model_no_answer');
     assert.equal(why['Gender'], 'no_profile_value');
     assert.equal(why['Ignore prior'], 'user_skipped');
 
     const sent = provider.prompts.map(p => p.raw).join('\n');
     const fields = provider.prompts.flatMap(p => p.request.fields.map(f => f.label));
-    assert.ok(!fields.some(l => /salary|Gender|certify/i.test(l)), 'sensitive fields stay local');
+    assert.ok(!fields.some(l => /Gender|certify/i.test(l)), 'demographic questions and checkboxes stay local');
+    assert.ok(fields.some(l => /salary/i.test(l)), 'a salary question can go to the model');
     assert.ok(!/2125550142/.test(sent), 'profile values outside model_context stay local');
     assert.equal(report.model.calls, provider.prompts.length);
     assert.equal(report.model.input_tokens, provider.prompts.length * 100);
