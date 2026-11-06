@@ -4,6 +4,7 @@ node_modules/
 
 # Personal data
 profile.local.json
+applications.local.csv
 
 # Local material
 bench/

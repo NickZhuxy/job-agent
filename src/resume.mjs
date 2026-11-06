@@ -124,6 +124,7 @@ export async function chooseResume(page, profile, { provider, confirmResume, onT
   result.tailor_recommended = selection.tailorRecommended;
   result.reason = selection.reason;
   result.company = selection.company;
+  result.role = selection.role;
 
   let tailored = null;
   if (selection.tailorRecommended && library.tailor) {
