@@ -22,13 +22,18 @@ const FORM = `<title>Intern at Acme</title><h1>Intern</h1><form id="apply">
   <button type="submit">Submit application</button>
 </form><script>document.getElementById('apply').addEventListener('submit', e => { e.preventDefault(); document.body.innerHTML = '<h2>Thank you for applying</h2>'; });</script>`;
 
+const CODE_FORM = `<title>Intern at Acme</title><h1>Intern</h1><form id="apply">
+  <label for="fn">First Name</label><input id="fn" required>
+  <button type="submit">Submit application</button>
+</form><script>document.getElementById('apply').addEventListener('submit', e => { e.preventDefault(); document.body.innerHTML = '<p>Enter your verification code</p>'; });</script>`;
+
 const answer = data => JSON.stringify({ choices: [{ message: { content: JSON.stringify(data) } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
 let base;
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
-    if (req.method === 'GET') { res.setHeader('Content-Type', 'text/html'); res.end(FORM); return; }
+    if (req.method === 'GET') { res.setHeader('Content-Type', 'text/html'); res.end(req.url === '/code' ? CODE_FORM : FORM); return; }
     const request = JSON.parse(body);
     if (request.messages[0].content.includes('final check')) {
       res.end(answer({ ok: true, problems: [] }));
@@ -165,6 +170,15 @@ test('a resume that passes the check is accepted with no question', async () => 
   assert.match(out, /The resume passed the check\. The agent accepts it\./);
   assert.doesNotMatch(out, /a resume id, p for a path/);
   assert.match(out, /Resume: +Alex_Rivera_SWE\.pdf/);
+});
+
+test('the submission step gets the profile, so the emailed code module can start', async () => {
+  const cwd = newFolder();
+  const profile = writeProfile(cwd, { auto_submit: true, email_code: { enabled: true } });
+  const { out, err, code } = await runFill([`${base}/code`, profile], [], cwd);
+  assert.equal(err, '');
+  assert.equal(code, 0);
+  assert.match(out, /The agent did not enter a code from your email\. This job platform is not supported\./);
 });
 
 test('the --no-submit and --json options work', async () => {

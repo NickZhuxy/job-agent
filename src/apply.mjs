@@ -92,7 +92,7 @@ export async function applyToJob({ url, profilePath, resume, provider = null, no
       // The page changes after the submission, so the job name is read first.
       const job = describeJob(await page.evaluate(() => ({ title: document.title, heading: document.querySelector('h1')?.innerText?.trim() })), selection);
       stage(STAGE_SUBMITTING);
-      report.submission = await submitApplication(page, report, { say, canWait });
+      report.submission = await submitApplication(page, report, { say, canWait, profile });
       if (report.submission.submitted) report.application_log = recordApplication(applicationsFile, { ...job, url, resume: resumePath && path.basename(resumePath) });
     }
     return { report, browser };
