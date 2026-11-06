@@ -44,6 +44,8 @@ export function tailorCommand(tailor) {
   return [
     'claude', '-p', skillPrompt(tailor),
     '--permission-mode', 'acceptEdits',
+    ...(tailor.model ? ['--model', tailor.model] : []),
+    ...(tailor.effort ? ['--effort', tailor.effort] : []),
     '--max-budget-usd', String(tailor.max_budget_usd ?? 5),
     '--settings', JSON.stringify(SANDBOX),
     '--disallowedTools', 'Bash(*shell-escape*)', 'Bash(*write18*)',

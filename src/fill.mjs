@@ -12,6 +12,7 @@ import { fillWithModel } from './agent.mjs';
 import { clarifyFields } from './clarify.mjs';
 import { createProvider } from './providers.mjs';
 import { chooseResume } from './resume.mjs';
+import { acceptAutomatically } from './resume-check.mjs';
 import { runSetup } from './setup.mjs';
 import { submitApplication } from './submit.mjs';
 import { formatReport, formatResumeChoice } from './summary.mjs';
@@ -49,6 +50,7 @@ async function confirm(item, draft) {
 async function confirmResume(choice) {
   const { candidates, selected } = choice;
   console.log(`\n${formatResumeChoice(choice)}\n`);
+  if (selected && await acceptAutomatically(selected.path, profile.resume_library, provider, console.log)) return { action: 'accept' };
   const answer = (await prompt.question(`Enter ${selected ? 'a to accept the recommendation, ' : ''}a resume id, p for a path, or s for no resume: `)).trim();
   if (answer === 'a') return { action: 'accept' };
   if (answer === 'p') return { action: 'path', path: (await prompt.question('Resume path: ')).trim() };

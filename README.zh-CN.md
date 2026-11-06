@@ -216,13 +216,54 @@ Agent 从你的简历文件夹中选择简历。不需要特殊的数据格式�
 
 Agent 只在你批准后才附加文件。有些表格在附加文件时会立即上传。
 
-模型只收到文件名和文件夹名，收不到简历内容和本地路径。只有岗位页面或 URL 中出现公司名时，Agent 才会提供对应的定向简历。
+模型只收到文件名和文件夹名，收不到本地路径。模型也收不到简历内容，但下一节的简历检查是例外。只有岗位页面或 URL 中出现公司名时，Agent 才会提供对应的定向简历。
 
 要使用指定的简历，请输入资料文件和简历路径：
 
 ```bash
 node src/fill.mjs "<form-url>" profile.local.json path/to/resume.pdf --model
 ```
+
+## 自动接受简历（可选）
+
+默认情况下，每份简历都由你批准。启用这个功能后，Agent 会检查推荐的简历。简历通过每一项检查后，Agent 会接受它。
+
+前提条件：
+
+- Poppler（一组 PDF 工具）中的 `pdfinfo` 和 `pdftotext` 命令
+- 模型配置
+
+步骤：
+
+1. 打开 `profile.local.json`。
+
+2. 在 `resume_library` 中添加 `auto_accept`，并输入你自己的值：
+
+   ```json
+   "auto_accept": {
+     "max_pages": 1,
+     "must_include": ["Alex Rivera", "Expected May 2027"],
+     "must_not_include": ["Old School"]
+   }
+   ```
+
+3. 填写表格：
+
+   ```bash
+   node src/fill.mjs "<form-url>" --model
+   ```
+
+Agent 按以下顺序检查：
+
+1. 规则检查页数、简历必须包含的文字和不能包含的词。规则还会查找出现两次、长度为 8 个词或以上的短语。
+2. 如果规则没有发现问题，模型会读取简历文本，查找错乱的文字、重复的内容、相互矛盾的事实，以及工具遗留在简历中的文字。
+
+如果某项检查发现问题或无法完成，Agent 会显示问题，由你决定。
+
+限制：
+
+- 这些检查发现不了不实的说法。不是你写的简历，请都读一遍。
+- 如果同时启用自动提交，Agent 可能提交一份你没有读过的简历。
 
 ## 自动定制简历（可选）
 
@@ -268,6 +309,7 @@ Agent 在定向简历文件夹中新建一个文件夹，保存 PDF、源文件�
 - 沙箱不可用时，工具不会启动。
 - 工具拿不到 Agent 的 API key，它使用自己的登录。
 - 工具在 15 分钟后或费用达到 5 美元时停止。要修改这些限制，请设置 `resume_library.tailor` 中的 `timeout_minutes` 和 `max_budget_usd`。
+- 工具使用 Claude Code 的默认模型。要使用其他模型或 effort 级别，请设置 `resume_library.tailor` 中的 `model` 和 `effort`。例如：`"model": "claude-opus-5-5", "effort": "medium"`。
 
 如果定制失败，Agent 会显示错误，并从简历库推荐一份简历。
 
