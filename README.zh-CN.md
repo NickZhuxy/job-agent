@@ -130,6 +130,19 @@ node src/fill.mjs "<form-url>" --model --no-submit
 
 Agent 提交的申请就是你本人的申请。启用这个功能之前，请检查你的资料。
 
+### 把投递记录导入 Simplify
+
+Agent 无法直接写入 Simplify 的 Job Tracker。当 Agent 找到提交成功的确认信息时，它会在当前文件夹的 `applications.local.csv` 中加一行。你自己提交的申请不会被记录。Git 会忽略这个文件。
+
+导入步骤：
+
+1. 在 Simplify 的 Job Tracker 中，选择 **Import CSV**。
+2. 选择 `applications.local.csv`。
+3. 把每一列对应到 Tracker 的字段：`Company`、`Position Title`、`Status`、`Posting Link` 和 `Notes`。投递日期在 `Notes` 中。
+4. 检查预览。如果某一行没有公司名，请填写公司名或跳过这一行。
+5. 完成导入。
+6. 把 `applications.local.csv` 移到废纸篓。下一次提交时会生成新文件。重复导入相同的行会产生重复记录。
+
 资料保存在 `profile.local.json` 中。只有你的用户账号可以读取这个文件，Git 也会忽略它。要修改资料，再次运行设置即可。已保存的答案会保留。
 
 如果 `profile.local.json` 不存在，`src/fill.mjs` 会先启动设置。

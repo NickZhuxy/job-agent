@@ -6,6 +6,7 @@ import { chromium } from 'playwright-core';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline/promises';
+import { APPLICATIONS_FILE, describeJob, recordApplication } from './applications.mjs';
 import { run } from './engine.mjs';
 import { fillWithModel } from './agent.mjs';
 import { clarifyFields } from './clarify.mjs';
@@ -78,7 +79,12 @@ const report = await fillRound();
 await clarifyFields(page, profile, report, { ask: question => prompt.question(question), say: console.log, onSave: saveProfile, refill: fillRound });
 if (selection) report.resume_selection = { ...selection, path: selection.path && path.basename(selection.path) };
 prompt.close();
-if (profile.auto_submit && !noSubmit) report.submission = await submitApplication(page, report, { say: console.log, canWait: !headless });
+if (profile.auto_submit && !noSubmit) {
+  // The page changes after the submission, so the job name is read first.
+  const job = describeJob(await page.evaluate(() => ({ title: document.title, heading: document.querySelector('h1')?.innerText?.trim() })), selection);
+  report.submission = await submitApplication(page, report, { say: console.log, canWait: !headless });
+  if (report.submission.submitted) report.application_log = recordApplication(APPLICATIONS_FILE, { ...job, url, resume: resumePath && path.basename(resumePath) });
+}
 console.log(`\n${showJson ? JSON.stringify(report, null, 2) : formatReport(report)}\n`);
 
 if (headless || report.submission?.submitted) {

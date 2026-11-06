@@ -130,6 +130,19 @@ At the end, the command shows a short summary: the result, the resume, and the a
 
 An application that the agent submits is an application from you. Examine your profile before you enable this function.
 
+### Import your applications to Simplify
+
+The agent cannot write to the Simplify Job Tracker. When the agent finds the confirmation of a submission, it adds one row to `applications.local.csv` in the current folder. An application that you submit yourself does not get a row. Git ignores this file.
+
+To import the file:
+
+1. In the Simplify Job Tracker, select **Import CSV**.
+2. Select `applications.local.csv`.
+3. Map each column to the tracker field. Map `Company`, `Position Title`, `Status`, `Posting Link`, and `Notes`. The application date is in `Notes`.
+4. Examine the preview. If a row does not have a company, enter the company or skip the row.
+5. Complete the import.
+6. Move `applications.local.csv` to the Trash. The next submission makes a new file. If you import the same rows again, you get duplicate records.
+
 The setup saves your data in `profile.local.json`. Only your user account can read this file, and Git ignores it. To change your data, run the setup again. The setup keeps your saved answers.
 
 If `profile.local.json` does not exist, `src/fill.mjs` starts the setup first.

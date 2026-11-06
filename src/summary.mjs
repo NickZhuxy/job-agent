@@ -25,6 +25,8 @@ export function formatReport(report) {
   }
   lines.push(`Fields:  ${report.filled.length} filled, ${report.skipped.length} skipped`);
   if (report.skipped.length) lines.push(`Skipped: ${report.skipped.join(', ')}`);
+  if (report.application_log?.file) lines.push(`For Simplify: added to ${report.application_log.file}`);
+  if (report.application_log?.error) lines.push(`For Simplify: not added to the file. ${report.application_log.error}`);
 
   const toExamine = report.filled.filter(item => /\((model|from you)\)$/.test(item));
   if (toExamine.length) lines.push('', 'Examine these answers:', ...list(toExamine));
