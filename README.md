@@ -94,6 +94,46 @@ Without a model, the setup finds only your email, phone, LinkedIn, and GitHub in
 
 The setup always asks you directly about work authorization, sponsorship, visa type, and demographic questions. It does not take these answers from a document.
 
+### Add your undergraduate degree
+
+The setup collects your current school only. To give your undergraduate degree, add this key to `profile.local.json`. Use the option text of the form:
+
+```json
+"undergraduate": {
+  "school": "State University",
+  "degree": "Bachelor's Degree",
+  "discipline": "Computer Science",
+  "disciplines": ["Mathematics", "Computer Science"],
+  "edu_start_month": "August",
+  "edu_start_year": "2019",
+  "grad_month": "May",
+  "grad_year": "2023"
+}
+```
+
+The agent uses these values in two conditions:
+
+- The form has an education section with an "Add another" button (Greenhouse). The agent adds a second entry and fills it. If a value has no exact option, the field stays empty for you, and the agent does not submit the form.
+- The question contains "undergraduate" or "bachelor".
+
+The agent does not answer a question about all schools that you attended. It asks you.
+
+### Tell where you found the job
+
+Set `referral` to a list of sources, for example `["LinkedIn", "Other"]`. For the question "How did you hear about this job?", the agent selects the first option that matches in this sequence:
+
+1. The first source in your list.
+2. A career website or a company website. A career fair is not a website.
+3. A job board.
+4. The other sources in your list.
+5. An answer that you gave before for the same question.
+
+If no option matches and the question is required, the agent asks you. The model does not answer this question.
+
+### Questions with many answers
+
+A required question can have many checkboxes. The agent asks you, and you enter one or more numbers. The agent keeps your answer for the same question. The model does not answer these questions.
+
 ## Legal and demographic answers
 
 The setup saves your answers to these questions. The agent then uses these rules for each form.
