@@ -24,7 +24,9 @@ export const RULES = [
 // Contact fields use short labels. A long sentence that contains "email" is a question, not an email field.
 const SHORT_LABEL_ONLY = new Set(['first_name', 'last_name', 'email', 'phone', 'location', 'linkedin', 'github', 'website', 'school', 'degree', 'discipline']);
 const MAX_SHORT_LABEL = 40;
-const findRule = label => RULES.find(([re, key]) => re.test(label) && !(SHORT_LABEL_ONLY.has(key) && label.length > MAX_SHORT_LABEL));
+// A label can start with the field name and then show an example of the format.
+const isShort = label => label.length <= MAX_SHORT_LABEL || /^(linkedin|github)\b/i.test(label);
+const findRule = label => RULES.find(([re, key]) => re.test(label) && !(SHORT_LABEL_ONLY.has(key) && !isShort(label)));
 // A saved yes or no answers the main question only. The user answers each follow-up question once.
 const YES_NO_KEYS = new Set(['authorized', 'sponsorship', 'worked_here_before']);
 const FOLLOW_UP = /\bif (yes|so|you|applicable)\b|please (explain|describe|specify|provide|list)|^(what|which|when|where|who|how)\b|\btype of\b|\bdetails?\b/i;
@@ -115,13 +117,20 @@ export async function scan(page) {
       if (by) { const t = clean(by.split(' ').map(i => document.getElementById(i)?.innerText || '').join(' ')); if (t) return t; }
       return clean(el.getAttribute('aria-label') || el.placeholder || el.name);
     };
+    // A section that opens after an answer can have a height of zero. Its fields still have a size.
+    const collapsed = el => {
+      for (let node = el.parentElement; node && node.tagName !== 'FORM'; node = node.parentElement) {
+        if (getComputedStyle(node).overflowY !== 'visible' && node.getBoundingClientRect().height < 1) return true;
+      }
+      return false;
+    };
     const out = [];
     window.__agentFieldCount ??= 0; // Keep ids stable across scans so that readback finds the same element.
     const els = document.querySelectorAll('form input, form select, form textarea');
     const seenRadio = new Set();
     for (const el of els) {
       if (['hidden', 'submit', 'button', 'search'].includes(el.type)) continue;
-      if (el.closest('[hidden]') || el.closest('.iti__country-list, [role=dialog]')) continue;
+      if (el.closest('[hidden]') || el.closest('.iti__country-list, [role=dialog]') || collapsed(el)) continue;
       if (el.getAttribute('aria-hidden') === 'true' || el.tabIndex === -1 && el.type !== 'file' && el.getAttribute('role') !== 'combobox') continue;
       const id = el.getAttribute('data-agent-field') || 'f' + window.__agentFieldCount++; el.setAttribute('data-agent-field', id);
       const role = el.getAttribute('role');
@@ -155,7 +164,7 @@ export async function scan(page) {
       const hidden = button.querySelector('input[type=hidden]') ?? button.parentElement?.querySelector('input[type=hidden]');
       const list = document.getElementById(button.getAttribute('aria-controls'));
       const options = [...(list?.querySelectorAll('li') ?? [])].map(li => clean(li.textContent));
-      if (!hidden || !options.length || hidden.value || !button.getClientRects().length) continue;
+      if (!hidden || !options.length || hidden.value || !button.getClientRects().length || collapsed(button)) continue;
       const id = button.getAttribute('data-agent-field') || 'f' + window.__agentFieldCount++; button.setAttribute('data-agent-field', id);
       const before = button.parentElement.previousElementSibling?.innerText ?? '';
       let label = clean(before.split('\n')[0]) || clean(button.getAttribute('aria-label') || hidden.name);

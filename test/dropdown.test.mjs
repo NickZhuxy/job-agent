@@ -98,3 +98,37 @@ test('an empty required dropdown stops the submission', async () => {
   assert.equal((await submitBlockers(page, report)).length, 1);
   assert.equal(await hiddenValue(page, 'year'), '');
 });
+
+// Jane Street opens the student section after the answer Yes. Until then the section has a height of zero.
+const COLLAPSIBLE = `<div>Are you a student?</div>
+  <div><input type="radio" name="student" id="yes" onchange="document.querySelector('.reveal').style.cssText = ''"><label for="yes">Yes</label>
+  <input type="radio" name="student" id="no"><label for="no">No</label></div>
+  <div class="reveal" style="max-height: 0; overflow: hidden; opacity: 0">
+    <label for="mail">School email</label><input id="mail" type="email" required>
+    ${dropdown('college', 'Select your school.', items(['Columbia University', 'New York University']))}
+  </div>`;
+
+test('fields in a collapsed section wait until an answer opens the section', async () => {
+  const page = await form(COLLAPSIBLE);
+  const labels = async () => (await scan(page)).map(f => f.label);
+  assert.deepEqual(await labels(), ['Are you a student?']);
+  await page.locator('#yes').check();
+  assert.deepEqual(await labels(), ['Are you a student?', 'School email', 'Select your school.']);
+});
+
+test('the agent fills a field after the section opens', async () => {
+  const page = await form(COLLAPSIBLE);
+  const profile = { school: 'Columbia University', email: 'a@example.edu', clarified: { 'are you a student': { question: 'Are you a student?', answer: 'Yes' } } };
+  const report = await run(page, profile);
+  assert.equal(await hiddenValue(page, 'college'), 'Columbia University');
+  assert.equal(await page.locator('#mail').inputValue(), 'a@example.edu');
+  assert.deepEqual(report.review, []);
+});
+
+test('a LinkedIn label with an example of the format is still the LinkedIn field', async () => {
+  const page = await form(`<label for="l">LinkedIn profile URL (E.g., 'https://www.linkedin.com/in/your-name')</label><input id="l" type="text">
+    <label for="q">Tell us why your LinkedIn activity matters to you in a few short sentences</label><input id="q" type="text">`);
+  await run(page, { linkedin: 'linkedin.com/in/example' });
+  assert.equal(await page.locator('#l').inputValue(), 'linkedin.com/in/example');
+  assert.equal(await page.locator('#q').inputValue(), '');
+});
