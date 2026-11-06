@@ -37,7 +37,7 @@ export async function clarifyFields(page, profile, report, { ask, say, onSave, r
       const written = await writeField(page, item, answer);
       if (written === null) { item.why = 'write_failed'; continue; }
       report.review.splice(report.review.indexOf(item), 1);
-      report.filled.push(`${item.label.slice(0, 40)} = ${String(written).slice(0, 40)} (from you)`);
+      report.filled.push(`${item.label.slice(0, 70)} = ${String(written).slice(0, 40)} (from you)`);
       report.checks.push({ id: item.id, kind: item.kind, label: item.label, value: String(written) });
       profile.clarified = { ...profile.clarified, [questionKey(item.label)]: { question: item.label, answer: written } };
       onSave?.();

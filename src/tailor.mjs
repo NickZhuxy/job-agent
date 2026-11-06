@@ -71,6 +71,14 @@ function newFolder(root, name) {
   return folder;
 }
 
+// Keeps the end of the output, where Claude Code writes its report. A long report starts at a full line.
+export function noteTail(output, limit = 4000) {
+  const text = output.trim();
+  if (text.length <= limit) return text;
+  const tail = text.slice(-limit);
+  return tail.slice(tail.indexOf('\n') + 1);
+}
+
 // Returns { path, folder, name, notes, seconds } or { error }.
 export async function tailorResume(profile, { jobText, url, company, role }, { env = process.env } = {}) {
   const library = profile.resume_library ?? {};
@@ -107,5 +115,5 @@ export async function tailorResume(profile, { jobText, url, company, role }, { e
   if (result.error || result.code !== 0) return { error: `The tailoring tool failed (${result.error ?? `exit code ${result.code}`}). See ${path.join(folder, 'tailor.log')}.`, seconds };
   const header = fs.existsSync(output) ? fs.readFileSync(output).subarray(0, 5).toString('latin1') : '';
   if (header !== '%PDF-') return { error: `The tailoring tool did not write a PDF. See ${path.join(folder, 'tailor.log')}.`, seconds };
-  return { path: output, folder: path.basename(folder), name, notes: result.output.trim().slice(-1500), seconds };
+  return { path: output, folder: path.basename(folder), name, notes: noteTail(result.output), seconds };
 }

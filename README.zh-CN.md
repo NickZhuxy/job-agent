@@ -126,6 +126,8 @@ Agent 分为三层。Playwright 是操作浏览器的程序库。CAPTCHA 是识�
 node src/fill.mjs "<form-url>" --model --no-submit
 ```
 
+命令结束时显示简短摘要：结果、使用的简历和需要检查的答案。要查看 JSON 格式的完整报告，加上 `--json` 选项。
+
 Agent 提交的申请就是你本人的申请。启用这个功能之前，请检查你的资料。
 
 资料保存在 `profile.local.json` 中。只有你的用户账号可以读取这个文件，Git 也会忽略它。要修改资料，再次运行设置即可。已保存的答案会保留。

@@ -12,7 +12,7 @@ export async function fillWithModel(page, profile, { resume, provider, confirm, 
   const write = async (item, value) => {
     const written = await writeField(page, item, value);
     if (written === null) { hold(item, 'write_failed', value); return false; }
-    report.filled.push(`${item.label.slice(0, 40)} = ${written.slice(0, 40)} (model)`);
+    report.filled.push(`${item.label.slice(0, 70)} = ${written.slice(0, 40)} (model)`);
     report.checks.push({ id: item.id, kind: item.kind, label: item.label, value: written });
     return true;
   };
