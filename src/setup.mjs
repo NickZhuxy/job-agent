@@ -16,7 +16,7 @@ const MAX_CHARS = 40000;
 const FIELDS = [
   ['first_name', 'First name', true], ['last_name', 'Last name', true], ['email', 'Email', true], ['phone', 'Phone'],
   ['country', 'Country'], ['location', 'City'], ['linkedin', 'LinkedIn URL'], ['github', 'GitHub URL'], ['website', 'Website'],
-  ['school', 'School'], ['degree', 'Degree'], ['discipline', 'Major'], ['grad_month', 'Graduation month'], ['grad_year', 'Graduation year'],
+  ['school', 'School'], ['degree', 'Degree'], ['discipline', 'Major'], ['grad_month', 'Graduation month'], ['grad_year', 'Graduation year'], ['edu_start_month', 'Month that you started at this school'], ['edu_start_year', 'Year that you started at this school'],
   ['gpa', 'GPA'], ['gpa_undergraduate', 'Undergraduate GPA, if you have a different one'], ['start_date', 'Earliest start date'], ['referral', 'How you found jobs, for "how did you hear about us" questions'],
 ];
 

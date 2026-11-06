@@ -114,3 +114,36 @@ test('a question about undergraduate study gets that GPA', async () => {
   assert.deepEqual(await page.evaluate(() => ['a', 'b', 'c', 'd'].map(id => document.getElementById(id).value)), ['3.9', '3.5', '3.9', 'Alex Rivera']);
   await page.close();
 });
+
+test('real form labels go to the correct values', async () => {
+  const page = await browser.newPage();
+  const fields = {
+    a: 'Start date year', b: 'Start date month', c: 'End date year', d: 'End date month', e: 'Earliest start date',
+    f: 'What grade did you achieve in your Bachelors (or equivalent) degree?', g: 'What Masters degree qualification do you expect to be awarded?', h: 'Degree', i: 'School',
+  };
+  await page.setContent(`<form>${Object.entries(fields).map(([id, label]) => `<label for="${id}">${label}</label><input id="${id}">`).join('')}</form>`);
+  await run(page, { ...PROFILE, edu_start_year: '2026', edu_start_month: 'September', grad_year: '2027', grad_month: 'December', start_date: '2027-05-31', degree: "Master's", school: 'Columbia' });
+  assert.deepEqual(await page.evaluate(ids => ids.map(id => document.getElementById(id).value), Object.keys(fields)), ['2026', 'September', '2027', 'December', '2027-05-31', '', '', "Master's", 'Columbia']);
+  await page.close();
+});
+
+test('a hidden required input is named by the label near it, and a question is listed one time', async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<form>
+    <div><label>How did you hear about us?*</label><div><input class="requiredInput" required aria-hidden="true" tabindex="-1"></div></div>
+    <div><label>Bachelors grade*</label><div><input class="requiredInput" required aria-hidden="true" tabindex="-1"></div></div>
+  </form>`);
+  const report = { review: [{ label: 'Bachelors grade', why: 'no_rule', required: true }] };
+  assert.deepEqual(await submitBlockers(page, report), ['Bachelors grade (no_rule)', 'Invalid: How did you hear about us?*']);
+  await page.close();
+});
+
+test('a required question with a skip rule goes to review, and it stops the submission', async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<form><label for="p">Please share your preferred pronouns:</label><input id="p" aria-required="true"><label for="q">Pronouns</label><input id="q"><button type="submit">Submit application</button></form>`);
+  const report = await run(page, PROFILE);
+  assert.deepEqual(report.review.map(r => r.label), ['Please share your preferred pronouns:']);
+  assert.deepEqual(report.skipped, ['Pronouns']);
+  assert.equal((await submitApplication(page, report)).why, 'form_not_ready');
+  await page.close();
+});

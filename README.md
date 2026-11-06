@@ -126,6 +126,8 @@ To fill a form and not submit it, use the `--no-submit` option:
 node src/fill.mjs "<form-url>" --model --no-submit
 ```
 
+At the end, the command shows a short summary: the result, the resume, and the answers to examine. To see the full report in JSON (JavaScript Object Notation), add the `--json` option.
+
 An application that the agent submits is an application from you. Examine your profile before you enable this function.
 
 The setup saves your data in `profile.local.json`. Only your user account can read this file, and Git ignores it. To change your data, run the setup again. The setup keeps your saved answers.

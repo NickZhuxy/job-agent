@@ -1,6 +1,6 @@
 // Fills one application form. If the profile sets auto_submit, the agent also signs and submits it.
 // Otherwise, and with --no-submit, the form stays open for review.
-// Usage: node src/fill.mjs <form-url> [profile.json] [resume.pdf] [--model] [--no-submit]
+// Usage: node src/fill.mjs <form-url> [profile.json] [resume.pdf] [--model] [--no-submit] [--json]
 // If the profile does not exist, setup starts first.
 import { chromium } from 'playwright-core';
 import fs from 'fs';
@@ -13,13 +13,15 @@ import { createProvider } from './providers.mjs';
 import { chooseResume } from './resume.mjs';
 import { runSetup } from './setup.mjs';
 import { submitApplication } from './submit.mjs';
+import { formatReport, formatResumeChoice } from './summary.mjs';
 
 const args = process.argv.slice(2);
 const useModel = args.includes('--model');
 const noSubmit = args.includes('--no-submit');
+const showJson = args.includes('--json');
 const [url, profilePath = 'profile.local.json', resume] = args.filter(arg => !arg.startsWith('--'));
 if (!url) {
-  console.error('Usage: node src/fill.mjs <form-url> [profile.json] [resume.pdf] [--model] [--no-submit]');
+  console.error('Usage: node src/fill.mjs <form-url> [profile.json] [resume.pdf] [--model] [--no-submit] [--json]');
   process.exit(1);
 }
 
@@ -43,15 +45,10 @@ async function confirm(item, draft) {
   if (choice === 'r') return { action: 'revise', feedback: await prompt.question('Your feedback: ') };
   return { action: 'skip' };
 }
-async function confirmResume({ candidates, selected, tailorRecommended, reason, tailored, tailorError, tailorConfigured }) {
-  console.log('\nResumes:');
-  for (const c of candidates) console.log(`  ${c.id}  [${c.kind}] ${c.folder ? `${c.folder} / ` : ''}${c.name}`);
-  if (selected) console.log(`Recommended: ${selected.id} (${selected.name})`);
-  if (reason) console.log(`Reason: ${reason}`);
-  if (tailored) console.log(`Tailored resume, made in ${tailored.seconds} seconds. Examine it before you accept it:\n  ${tailored.path}\n${tailored.notes}`);
-  if (tailorError) console.log(`Tailoring failed. ${tailorError}`);
-  if (tailorRecommended && !tailorConfigured) console.log('This job may need a tailored resume. Run setup to add a resume skill, or enter the path of a tailored resume.');
-  const answer = (await prompt.question(`${selected ? '[a]ccept, ' : ''}a resume id, a [p]ath, or [s]kip upload? `)).trim();
+async function confirmResume(choice) {
+  const { candidates, selected } = choice;
+  console.log(`\n${formatResumeChoice(choice)}\n`);
+  const answer = (await prompt.question(`Enter ${selected ? 'a to accept the recommendation, ' : ''}a resume id, p for a path, or s for no resume: `)).trim();
   if (answer === 'a') return { action: 'accept' };
   if (answer === 'p') return { action: 'path', path: (await prompt.question('Resume path: ')).trim() };
   if (candidates.some(c => c.id === answer)) return { action: 'choose', id: answer };
@@ -82,7 +79,7 @@ await clarifyFields(page, profile, report, { ask: question => prompt.question(qu
 if (selection) report.resume_selection = { ...selection, path: selection.path && path.basename(selection.path) };
 prompt.close();
 if (profile.auto_submit && !noSubmit) report.submission = await submitApplication(page, report, { say: console.log, canWait: !headless });
-console.log(JSON.stringify(report, null, 2));
+console.log(`\n${showJson ? JSON.stringify(report, null, 2) : formatReport(report)}\n`);
 
 if (headless || report.submission?.submitted) {
   await browser.close();

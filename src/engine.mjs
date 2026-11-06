@@ -10,6 +10,8 @@ export const RULES = [
   [/e-?mail/i, 'email'], [/^country/i, 'country'], [/phone|mobile/i, 'phone'],
   [/location|\bcity\b/i, 'location'], [/linkedin/i, 'linkedin'], [/github/i, 'github'], [/website|portfolio/i, 'website'],
   [/cover letter/i, null], [/resume|\bcv\b/i, 'resume'],
+  // The education section of a form uses these short labels. A job start date is a different question.
+  [/^start date month/i, 'edu_start_month'], [/^start date year/i, 'edu_start_year'], [/^end date month/i, 'grad_month'], [/^end date year/i, 'grad_year'],
   [/graduation month/i, 'grad_month'], [/graduation year/i, 'grad_year'], [/graduation date/i, 'grad_term'], [/\bgpa\b/i, 'gpa'],
   [/school|university/i, 'school'], [/degree/i, 'degree'], [/discipline|major|field of study/i, 'discipline'],
   [/visa type/i, 'visa_type'], [/sponsor/i, 'sponsorship'], [/authorized|eligible to work/i, 'authorized'],
@@ -17,7 +19,7 @@ export const RULES = [
   [/gender|\bsex\b|hispanic|latin[oax]|\brace\b|ethnic|veteran|military|disabilit|sexual|lgbt/i, '__eeo'],
 ];
 // Contact fields use short labels. A long sentence that contains "email" is a question, not an email field.
-const SHORT_LABEL_ONLY = new Set(['first_name', 'last_name', 'email', 'phone', 'location', 'linkedin', 'github', 'website']);
+const SHORT_LABEL_ONLY = new Set(['first_name', 'last_name', 'email', 'phone', 'location', 'linkedin', 'github', 'website', 'school', 'degree', 'discipline']);
 const MAX_SHORT_LABEL = 40;
 const findRule = label => RULES.find(([re, key]) => re.test(label) && !(SHORT_LABEL_ONLY.has(key) && label.length > MAX_SHORT_LABEL));
 // A saved yes or no answers the main question only. The user answers each follow-up question once.
@@ -203,7 +205,7 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
       else if (key === 'resume') review('upload_disabled'); else report.skipped.push(f.label.slice(0, 40));
       continue;
     }
-    if (key === null) { report.skipped.push(f.label.slice(0, 40)); continue; }
+    if (key === null) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     if (key === undefined) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     const isChoice = ['select', 'radio', 'combobox'].includes(f.kind);
     if (YES_NO_KEYS.has(key) && (!isChoice || FOLLOW_UP.test(f.label))) { review('follow_up'); continue; }

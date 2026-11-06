@@ -11,8 +11,19 @@ export async function submitBlockers(page, report) {
   for (const failed of report.readback_failed ?? []) blockers.push(`Readback: ${failed}`);
   const invalid = await page.evaluate(() => [...document.querySelectorAll('form :invalid')]
     .filter(el => el.tagName !== 'FORM' && el.tagName !== 'FIELDSET' && el.getClientRects().length)
-    .map(el => el.labels?.[0]?.innerText?.trim() || el.name || el.id));
-  for (const name of invalid) blockers.push(`Invalid: ${String(name).slice(0, 60)}`);
+    .map(el => {
+      if (el.labels?.[0]) return el.labels[0].innerText.trim();
+      if (el.name || el.id) return el.name || el.id;
+      // A custom dropdown can keep a hidden required input with no label of its own.
+      for (let node = el.parentElement; node && node.tagName !== 'FORM'; node = node.parentElement) {
+        const label = node.querySelector('label');
+        if (label) return label.innerText.trim();
+      }
+      return 'unnamed field';
+    }));
+  const plain = text => text.replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const listed = new Set(report.review.filter(item => item.required).map(item => plain(item.label)));
+  for (const name of invalid) if (!listed.has(plain(name))) blockers.push(`Invalid: ${name.slice(0, 60)}`);
   return blockers;
 }
 
@@ -42,15 +53,9 @@ const challengeVisible = async page => {
 
 export async function submitApplication(page, report, { say = () => {}, canWait = true, userWaitMs = USER_WAIT_MS } = {}) {
   const blockers = await submitBlockers(page, report);
-  if (blockers.length) {
-    say(`The agent did not submit. Complete these fields in Chrome:\n  ${blockers.join('\n  ')}`);
-    return { submitted: false, why: 'form_not_ready', blockers };
-  }
+  if (blockers.length) return { submitted: false, why: 'form_not_ready', blockers };
   const button = await findSubmitButton(page);
-  if (!button) {
-    say('The agent did not find one submit button. Submit the form in Chrome.');
-    return { submitted: false, why: 'no_submit_button' };
-  }
+  if (!button) return { submitted: false, why: 'no_submit_button' };
 
   const startUrl = page.url();
   await button.click();
@@ -70,11 +75,7 @@ export async function submitApplication(page, report, { say = () => {}, canWait 
     }
     const errors = await page.evaluate(() => [...document.querySelectorAll('[aria-invalid="true"], .error, .field-error, [role=alert]')]
       .filter(el => el.getClientRects().length).map(el => (el.innerText || el.name || el.id || '').trim()).filter(Boolean).slice(0, 5));
-    if (errors.length && Date.now() - started >= ERROR_WAIT_MS - POLL_MS) {
-      say(`The page shows errors. The agent did not click again:\n  ${errors.join('\n  ')}`);
-      return { submitted: false, why: 'form_errors', errors };
-    }
+    if (errors.length && Date.now() - started >= ERROR_WAIT_MS - POLL_MS) return { submitted: false, why: 'form_errors', errors };
   }
-  say('The agent clicked submit but did not find a confirmation. Examine the page in Chrome before you submit again.');
   return { submitted: false, why: 'not_confirmed', clicked: true };
 }

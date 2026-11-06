@@ -6,7 +6,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
 import { chooseResume } from '../src/resume.mjs';
-import { safeName, tailorCommand, tailorResume } from '../src/tailor.mjs';
+import { noteTail, safeName, tailorCommand, tailorResume } from '../src/tailor.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'job-agent-tailor-'));
 test.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -65,6 +65,15 @@ test('Claude Code gets the job in a file, runs in its folder, and does not get A
 
   const second = await tailorResume(profile(), job, { env });
   assert.equal(second.folder, 'Alex_Rivera_Acme_Backend_Engineer_2', 'an earlier resume stays');
+});
+
+test('long notes keep the end of the output and start at the start of a line', () => {
+  assert.equal(noteTail('  short note\n'), 'short note');
+  const lines = Array.from({ length: 400 }, (_, i) => `line ${i} of the notes`);
+  const tail = noteTail(lines.join('\n'));
+  assert.ok(tail.length <= 4000);
+  assert.ok(tail.endsWith('line 399 of the notes'));
+  assert.match(tail, /^line \d+ of the notes\n/);
 });
 
 test('the command is always Claude Code with the sandbox, and a profile cannot replace it', () => {
