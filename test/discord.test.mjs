@@ -528,6 +528,30 @@ test('each stop of the flow reaches Discord and waits, and the summary arrives',
   }
 });
 
+test('a resume check that does not pass reaches Discord with the PDF, and the choice waits', async () => {
+  const folder = fs.mkdtempSync(path.join(root, 'check-'));
+  const restore = fakeClaudeOnPath(path.join(folder, 'bin'));
+  const { server, url } = await formServer(FORM);
+  const profilePath = writeProfile(folder);
+  const profile = JSON.parse(fs.readFileSync(profilePath, 'utf8'));
+  profile.resume_library.auto_accept = { max_pages: 1 };
+  fs.writeFileSync(profilePath, JSON.stringify(profile));
+  const { remote, sent, text } = fixture(jobRunner({ profilePath, provider: fakeProvider, headless: true, applicationsFile: path.join(folder, 'applications.csv') }));
+  try {
+    await apply(remote, url);
+    await until(() => text().includes('a resume id, p for a path'), 'the resume choice');
+    assert.match(text(), /The resume check could not read the file/);
+    assert.ok(sent.some(item => item.files), 'the tailored PDF arrives');
+    assert.ok(!text().includes(os.homedir()), 'the home folder is not sent');
+    assert.equal(server.posts, 0);
+    await cancel(remote);
+    await until(async () => /No job runs/.test(await statusOf(remote)), 'the job to end');
+  } finally {
+    restore();
+    server.close();
+  }
+});
+
 test('a cancel during a question closes the browser, and nothing is submitted', async () => {
   const folder = fs.mkdtempSync(path.join(root, 'cancel-'));
   const { server, url } = await formServer(FORM);

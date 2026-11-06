@@ -3,7 +3,7 @@
 import { comboOptions, questionKey, verifyChecks, writeField } from './engine.mjs';
 import { SENSITIVE } from './model.mjs';
 
-const WAITS_FOR_USER = /^(follow_up|region_not_configured|no_rule|no_profile_value|no_exact_option|combobox_no_match|model_no_answer|model_option_not_exact)/;
+const WAITS_FOR_USER = /^(follow_up|region_not_configured|no_rule|no_profile_value|no_exact_option|combobox_no_match|model_no_answer|model_option_not_exact|source_no_match)/;
 // The profile does not store these secrets.
 export const NEVER_SAVED = /password|social security|\bssn\b/i;
 const MAX_ROUNDS = 3;
@@ -15,9 +15,17 @@ export const needsUser = item =>
 async function askOne(item, opts, { ask, say, skipHint = 'press Enter' }) {
   say(`\nThe form asks: ${item.label}`);
   if (opts?.length) opts.forEach((option, index) => say(`  ${index + 1}. ${option}`));
+  const many = item.kind === 'checkboxes';
   for (;;) {
-    const typed = (await ask(`${opts?.length ? 'Enter a number' : 'Enter your answer'}, or ${skipHint} to answer on the form: `)).trim();
+    const how = many ? 'Enter one or more numbers with commas between them' : opts?.length ? 'Enter a number' : 'Enter your answer';
+    const typed = (await ask(`${how}, or ${skipHint} to answer on the form: `)).trim();
     if (!typed || !opts?.length) return typed;
+    if (many) {
+      const picks = typed.split(/[,，\s]+/).filter(Boolean).map(number => opts[Number(number) - 1]);
+      if (picks.every(Boolean)) return picks;
+      say('Enter numbers from the list.');
+      continue;
+    }
     const chosen = opts[Number(typed) - 1] ?? opts.find(option => option.toLowerCase() === typed.toLowerCase());
     if (chosen) return chosen;
     say('Enter one of the numbers.');

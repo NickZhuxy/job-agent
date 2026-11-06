@@ -8,6 +8,7 @@ import { run } from './engine.mjs';
 import { fillWithModel } from './agent.mjs';
 import { clarifyFields } from './clarify.mjs';
 import { chooseResume } from './resume.mjs';
+import { acceptAutomatically } from './resume-check.mjs';
 import { submitApplication } from './submit.mjs';
 import { formatResumeChoice } from './summary.mjs';
 
@@ -33,6 +34,7 @@ export async function applyToJob({ url, profilePath, resume, provider = null, no
   async function confirmResume(choice) {
     const { candidates, selected, tailored } = choice;
     say(`\n${formatResumeChoice(choice)}\n`);
+    if (selected && await acceptAutomatically(selected.path, profile.resume_library, provider, say)) return { action: 'accept' };
     if (tailored) io.attach?.(tailored.path);
     for (;;) {
       const answer = (await ask(`Enter ${selected ? 'a to accept the recommendation, ' : ''}a resume id, p for a path, or s for no resume: `)).trim().toLowerCase();

@@ -95,6 +95,46 @@ Without a model, the setup finds only your email, phone, LinkedIn, and GitHub in
 
 The setup always asks you directly about work authorization, sponsorship, visa type, and demographic questions. It does not take these answers from a document.
 
+### Add your undergraduate degree
+
+The setup collects your current school only. To give your undergraduate degree, add this key to `profile.local.json`. Use the option text of the form:
+
+```json
+"undergraduate": {
+  "school": "State University",
+  "degree": "Bachelor's Degree",
+  "discipline": "Computer Science",
+  "disciplines": ["Mathematics", "Computer Science"],
+  "edu_start_month": "August",
+  "edu_start_year": "2019",
+  "grad_month": "May",
+  "grad_year": "2023"
+}
+```
+
+The agent uses these values in two conditions:
+
+- The form has an education section with an "Add another" button (Greenhouse). The agent adds a second entry and fills it. If a value has no exact option, the field stays empty for you, and the agent does not submit the form.
+- The question contains "undergraduate" or "bachelor".
+
+The agent does not answer a question about all schools that you attended. It asks you.
+
+### Tell where you found the job
+
+Set `referral` to a list of sources, for example `["LinkedIn", "Other"]`. For the question "How did you hear about this job?", the agent selects the first option that matches in this sequence:
+
+1. The first source in your list.
+2. A career website or a company website. A career fair is not a website.
+3. A job board.
+4. The other sources in your list.
+5. An answer that you gave before for the same question.
+
+If no option matches and the question is required, the agent asks you. The model does not answer this question.
+
+### Questions with many answers
+
+A required question can have many checkboxes. The agent asks you, and you enter one or more numbers. The agent keeps your answer for the same question. The model does not answer these questions.
+
 ## Legal and demographic answers
 
 The setup saves your answers to these questions. The agent then uses these rules for each form.
@@ -217,13 +257,54 @@ Procedure:
 
 The agent attaches a file only after you approve it. Some forms upload the file immediately when the agent attaches it.
 
-The model gets the file names and folder names. It does not get the resume content or the local paths. The agent offers a targeted resume only if the job page or URL contains the company name.
+The model gets the file names and folder names. It does not get the local paths. It does not get the resume content, but the resume check in the next section is an exception. The agent offers a targeted resume only if the job page or URL contains the company name.
 
 To use a specified resume, enter the profile and the resume path:
 
 ```bash
 node src/fill.mjs "<form-url>" profile.local.json path/to/resume.pdf --model
 ```
+
+## Accept a resume automatically (optional)
+
+By default, you approve each resume. If you enable this function, the agent checks the recommended resume. It accepts the resume if the resume passes each check.
+
+Prerequisites:
+
+- The `pdfinfo` and `pdftotext` commands from Poppler, a set of PDF tools
+- A model configuration
+
+Procedure:
+
+1. Open `profile.local.json`.
+
+2. Add `auto_accept` to `resume_library`. Enter your own values:
+
+   ```json
+   "auto_accept": {
+     "max_pages": 1,
+     "must_include": ["Alex Rivera", "Expected May 2027"],
+     "must_not_include": ["Old School"]
+   }
+   ```
+
+3. Fill a form:
+
+   ```bash
+   node src/fill.mjs "<form-url>" --model
+   ```
+
+The agent does these checks in this sequence:
+
+1. Rules examine the page count, the text that the resume must contain, and the words that it must not contain. They also look for a phrase of 8 or more words that occurs two times.
+2. If the rules find no problem, the model reads the text of the resume. It looks for garbled text, repeated content, conflicting facts, and text that a tool left in the resume.
+
+If a check finds a problem or cannot complete, the agent shows the problem and you decide.
+
+Limits:
+
+- The checks do not find a claim that is false. Read each resume that you did not write.
+- If you also enable automatic submission, the agent can submit a resume that you did not read.
 
 ## Tailor a resume automatically (optional)
 
@@ -269,6 +350,7 @@ Limits for each run:
 - If the sandbox is not available, the tool does not start.
 - The tool does not get the API keys from the agent. It uses its own login.
 - The tool stops after 15 minutes or at a cost of 5 USD. To change these limits, set `timeout_minutes` and `max_budget_usd` in `resume_library.tailor`.
+- The tool uses the default model of Claude Code. To use a different model or effort level, set `model` and `effort` in `resume_library.tailor`. For example: `"model": "claude-opus-5-5", "effort": "medium"`.
 
 If tailoring fails, the agent shows the error and recommends a resume from your library.
 
@@ -338,7 +420,7 @@ The commands operate only in the direct message.
 
 Jobs run one at a time. The bot asks each question that the terminal asks. Reply in a normal message:
 
-- **Resume:** The bot sends the recommendation. If the agent made a tailored resume, the bot also sends the PDF and the notes. Reply with `a`, a resume id, `p`, or `s`.
+- **Resume:** The bot sends the recommendation. If the agent made a tailored resume, the bot also sends the PDF and the notes. Reply with `a`, a resume id, `p`, or `s`. If you set `auto_accept` and the resume passes the check, the agent accepts the resume. The bot does not ask you and does not send the PDF.
 - **Draft:** Reply with `a`, `e`, `r`, or `s`.
 - **New question:** Reply with your answer or the number of an option. To complete the field later in Chrome, reply with `-`.
 
@@ -362,6 +444,7 @@ Discord stores the messages and the files. Discord messages do not have end-to-e
 - The tailored PDF and its notes. The PDF contains your contact data. The other resumes stay on the computer.
 - The new questions from forms, their options, and your replies
 - The model drafts and your changes
+- The problems from the resume check. A problem can quote text from the resume or a value from `auto_accept`.
 - The summary: the result, the resume name, the labels of the fields not filled or skipped, and the answers from you and from the model
 
 The other values from your profile do not go to Discord. If the page changes a value, the summary names the field and does not show the value. The bot hides each line that names a password or a social security number, and each value with the format of a social security number.

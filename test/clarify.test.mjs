@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { clarifyFields, needsUser } from '../src/clarify.mjs';
-import { findClarified, mentionsEmployer, questionKey, regionAllowed, run } from '../src/engine.mjs';
+import { findClarified, mentionsEmployer, questionKey, regionAllowed, run, scan, writeField } from '../src/engine.mjs';
 
 const select = (id, label, options, required = true) => `<label for="${id}">${label}</label><select id="${id}" ${required ? 'required' : ''}><option value=""></option>${options.map(o => `<option>${o}</option>`).join('')}</select>`;
 const PROFILE = {
@@ -110,6 +110,26 @@ test('the employer list answers "have you worked here" for each company', async 
   const report = await run(none, { first_name: 'Alex' });
   assert.equal(report.review[0].why, 'no_profile_value', 'with no list, the user answers');
   await none.close();
+});
+
+// Jane Street hides each radio input, styles its label, and puts the question in a paragraph before the list.
+const HIDE_RADIOS = '<style>input[type=radio]{display:none}</style>';
+const HIDDEN_RADIOS = `<p id="interviewed-label">Have you interviewed before? <span>*</span></p>
+  <ul><li><input type="radio" id="i1" name="interviewed" value="true" required><label for="i1"><span></span><div>Yes</div></label></li>
+  <li><input type="radio" id="i0" name="interviewed" value="false" required><label for="i0"><span></span><div>No</div></label></li></ul>`;
+
+test('a radio group without a legend takes its question from the text before the group', async () => {
+  const page = await form(HIDDEN_RADIOS, HIDE_RADIOS);
+  const [field] = await scan(page);
+  assert.equal(field.label, 'Have you interviewed before?');
+  assert.deepEqual(field.opts, ['Yes', 'No']);
+});
+
+test('a hidden radio input is selected through its label', async () => {
+  const page = await form(HIDDEN_RADIOS, HIDE_RADIOS);
+  const [field] = await scan(page);
+  assert.equal(await writeField(page, field, 'No'), 'No');
+  assert.equal(await page.locator('#i0').isChecked(), true);
 });
 
 test('a radio button works when its value is not its label', async () => {

@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { chromium } from 'playwright-core';
 
 const FILL = path.resolve('src/fill.mjs');
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'job-agent-fill-'));
@@ -29,6 +30,10 @@ const server = http.createServer((req, res) => {
   req.on('end', () => {
     if (req.method === 'GET') { res.setHeader('Content-Type', 'text/html'); res.end(FORM); return; }
     const request = JSON.parse(body);
+    if (request.messages[0].content.includes('final check')) {
+      res.end(answer({ ok: true, problems: [] }));
+      return;
+    }
     if (request.messages[0].content.includes('one resume')) {
       res.end(answer({ resume_id: 'r1', tailor_recommended: false, reason: 'It fits the role.', company: 'Acme', role: 'Intern' }));
       return;
@@ -139,6 +144,27 @@ Not filled:
 
 `);
   assert.equal(fs.existsSync(path.join(cwd, 'applications.local.csv')), false);
+});
+
+test('a resume that passes the check is accepted with no question', async () => {
+  const cwd = newFolder();
+  const pdf = path.join(cwd, 'general', 'SWE', 'Alex_Rivera_SWE.pdf');
+  fs.mkdirSync(path.dirname(pdf), { recursive: true });
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const page = await browser.newPage();
+  await page.setContent('<p>Alex Rivera</p><p>Built a data pipeline.</p>');
+  await page.pdf({ path: pdf });
+  await browser.close();
+  const profile = writeProfile(cwd, { resume_library: { language: 'any', auto_accept: { max_pages: 2, must_include: ['Alex Rivera'] }, roots: [{ dir: path.dirname(path.dirname(pdf)), kind: 'general' }] } });
+  const { out, err, code } = await runFill([`${base}/`, profile, '--model'], [
+    ['[a]ccept, [e]dit, [r]evise, or [s]kip? ', 'a'],
+    ['Enter a number, or press Enter to answer on the form: ', '1'],
+  ], cwd);
+  assert.equal(err, '');
+  assert.equal(code, 0);
+  assert.match(out, /The resume passed the check\. The agent accepts it\./);
+  assert.doesNotMatch(out, /a resume id, p for a path/);
+  assert.match(out, /Resume: +Alex_Rivera_SWE\.pdf/);
 });
 
 test('the --no-submit and --json options work', async () => {
