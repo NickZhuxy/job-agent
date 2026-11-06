@@ -25,6 +25,16 @@
  "sponsorship": "Yes",
  "visa_type": "F-1",
  "start_date": "2027-06-01",
+ "undergraduate": {
+  "school": "State University",
+  "degree": "Bachelor's Degree",
+  "discipline": "Computer Science",
+  "disciplines": ["Mathematics", "Computer Science"],
+  "edu_start_month": "August",
+  "edu_start_year": "2019",
+  "grad_month": "May",
+  "grad_year": "2023"
+ },
  "referral": [
   "LinkedIn",
   "Other"

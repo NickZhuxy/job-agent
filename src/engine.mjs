@@ -4,6 +4,9 @@ const DECLINE = /decline|prefer not|rather not|choose not|(don.?t|do not) (wish|
 const CJK = /[㐀-鿿]/;
 const escapeRegExp = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const RULES = [
+  [/how did you (first )?(hear|connect|find|learn)|where did you (first )?(hear|find|learn|see)/i, 'referral'],
+  // The user decides which schools to list. The model does not answer this question either.
+  [/all (the )?(schools|colleges|universities|institutions)|(colleges?|schools?|universities|institutions) (you )?(have )?attended/i, null],
   [/preferred (first )?name|pronoun|emergency|extension/i, null],
   [/signature date|date signed|today.?s date/i, '__today'], [/\bsignature\b|\bsign your\b|typ(e|ing) your (full |legal )?name/i, '__signature'], [/\b(full|legal) name\b/i, '__full_name'],
   [/first name|given name/i, 'first_name'], [/last name|family name|surname/i, 'last_name'],
@@ -15,7 +18,7 @@ export const RULES = [
   [/graduation month/i, 'grad_month'], [/graduation year/i, 'grad_year'], [/graduation date/i, 'grad_term'], [/\bgpa\b/i, 'gpa'],
   [/school|university/i, 'school'], [/degree/i, 'degree'], [/discipline|major|field of study/i, 'discipline'],
   [/visa type/i, 'visa_type'], [/sponsor/i, 'sponsorship'], [/authorized|eligible to work/i, 'authorized'],
-  [/start date|available to start|earliest .*start/i, 'start_date'], [/how did you (hear|connect)/i, 'referral'], [/worked (for|at|with)|(previously|ever|been) employed (by|at|with)|former employee/i, 'worked_here_before'],
+  [/start date|available to start|earliest .*start/i, 'start_date'], [/worked (for|at|with)|(previously|ever|been) employed (by|at|with)|former employee/i, 'worked_here_before'],
   [/gender|\bsex\b|hispanic|latin[oax]|\brace\b|ethnic|veteran|military|disabilit|sexual|lgbt/i, '__eeo'],
 ];
 // Contact fields use short labels. A long sentence that contains "email" is a question, not an email field.
@@ -30,7 +33,8 @@ const ATTESTATION = /certify|attest|consent|agree|acknowledge|accept|confirm|und
 const todayFor = kind => { const [y, m, d] = new Date().toLocaleDateString('en-CA').split('-'); return kind === 'date' ? `${y}-${m}-${d}` : `${m}/${d}/${y}`; };
 const fullName = profile => profile.legal_name ?? [profile.first_name, profile.last_name].filter(Boolean).join(' ');
 // A question about undergraduate study gets that GPA. Other questions get the GPA of the current school.
-const gpaFor = (label, profile) => (/undergrad|bachelor/i.test(label) && profile.gpa_undergraduate) || profile.gpa;
+const UNDERGRADUATE = /undergrad|bachelor/i;
+const gpaFor = (label, profile) => (UNDERGRADUATE.test(label) && profile.gpa_undergraduate) || profile.gpa;
 // The first match wins, because "transgender" also contains "gender".
 const EEO_TOPICS = [['orientation', /sexual|orientation|lgbt|transgender/i], ['hispanic', /hispanic|latin[oax]/i], ['race', /\brace\b|ethnic/i], ['gender', /gender|\bsex\b/i], ['veteran', /veteran|military/i], ['disability', /disabilit/i]];
 const GENDER_WORDS = { male: 'man', female: 'woman' };
@@ -75,6 +79,18 @@ export function findClarified(store, label) {
   return null;
 }
 
+// The first source that the user named comes first, then a career website, then a job board. A career fair is not a website.
+const JOB_SOURCES = [/careers?\s*(web)?(site|page)|compan\w*\s*((web)?site|careers?|page)|(firm|corporate)\s*(web)?site|^(our\s+)?website$/i, /job\s*(board|site)|online/i];
+export function sourceChoice(opts, wanted) {
+  const named = word => new RegExp(`\\b${escapeRegExp(word)}\\b`, 'i');
+  const [first, ...others] = [].concat(wanted).map(named);
+  for (const pattern of [first, ...JOB_SOURCES, ...others]) {
+    const hit = opts.find(o => pattern.test(o));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 function eeoFallback(opts, want) {
   if (!want) return null;
   const direct = pickOption(opts, want);
@@ -110,16 +126,47 @@ export async function scan(page) {
       const id = el.getAttribute('data-agent-field') || 'f' + window.__agentFieldCount++; el.setAttribute('data-agent-field', id);
       const role = el.getAttribute('role');
       let kind = el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : role === 'combobox' ? 'combobox' : el.type;
+      // Checkboxes with one name are one question with many answers. One checkbox stays an attestation.
+      const sameName = el.type === 'checkbox' && el.name ? [...document.querySelectorAll(`input[type=checkbox][name="${el.name}"]`)] : [];
+      if (sameName.length > 1) kind = 'checkboxes';
       let label = labelOf(el), opts = null;
       if (kind === 'file') { const g = el.closest('[role=group],fieldset,.file-upload'); const t = clean((g?.innerText || '').split('\n')[0]); if (t) label = t; }
-      if (kind === 'radio') {
+      if (kind === 'radio' || kind === 'checkboxes') {
         if (seenRadio.has(el.name)) continue; seenRadio.add(el.name);
-        label = clean(el.closest('fieldset')?.querySelector('legend')?.innerText || label);
-        opts = [...document.querySelectorAll(`input[type=radio][name="${el.name}"]`)].map(r => clean(r.labels?.[0]?.innerText));
+        const group = kind === 'radio' ? [...document.querySelectorAll(`input[type=radio][name="${el.name}"]`)] : sameName;
+        opts = group.map(r => clean(r.labels?.[0]?.innerText));
+        const legend = clean(el.closest('fieldset')?.querySelector('legend')?.innerText);
+        // Without a legend, the label of the first input is an option. The question is the text before the group.
+        if (legend) label = legend;
+        else if (opts.includes(label)) {
+          let box = el.parentElement;
+          while (box && !group.every(r => box.contains(r))) box = box.parentElement;
+          const parts = [];
+          for (let node = box?.previousElementSibling; node && !node.querySelector('input, select, textarea'); node = node.previousElementSibling) parts.unshift(node.innerText);
+          label = clean(parts.join(' ')) || label;
+        }
       }
       if (kind === 'select') opts = [...el.options].map(o => clean(o.text)).filter(t => t && !/^select/i.test(t));
-      const required = el.required || el.getAttribute('aria-required') === 'true' || /\*/.test(el.labels?.[0]?.innerText || '');
+      const required = el.required || el.getAttribute('aria-required') === 'true' || el.closest('fieldset')?.getAttribute('aria-required') === 'true' || /\*/.test(el.labels?.[0]?.innerText || '');
       out.push({ id, kind, label, opts, required, name: el.name });
+    }
+    // A custom dropdown is a button that controls an option list. The answer goes in a hidden input.
+    for (const button of document.querySelectorAll('form [role=button][aria-controls]')) {
+      const hidden = button.querySelector('input[type=hidden]') ?? button.parentElement?.querySelector('input[type=hidden]');
+      const list = document.getElementById(button.getAttribute('aria-controls'));
+      const options = [...(list?.querySelectorAll('li') ?? [])].map(li => clean(li.textContent));
+      if (!hidden || !options.length || hidden.value || !button.getClientRects().length) continue;
+      const id = button.getAttribute('data-agent-field') || 'f' + window.__agentFieldCount++; button.setAttribute('data-agent-field', id);
+      const before = button.parentElement.previousElementSibling?.innerText ?? '';
+      let label = clean(before.split('\n')[0]) || clean(button.getAttribute('aria-label') || hidden.name);
+      // Two short labels, such as Month and Year, can share one question that comes before the group.
+      const group = button.parentElement.parentElement?.parentElement;
+      const shared = group?.previousElementSibling;
+      const isPart = before.length <= 20 && !before.includes('*') && group?.querySelectorAll('[role=button][aria-controls]').length > 1 && shared && !shared.querySelector('input, select, textarea');
+      const question = isPart ? shared.innerText : '';
+      if (clean(question)) label = `${clean(question.split('\n')[0])} - ${label}`;
+      const required = hidden.required || hidden.classList.contains('required') || button.getAttribute('aria-required') === 'true' || before.includes('*') || question.includes('*');
+      out.push({ id, kind: 'dropdown', label, opts: options, required, name: hidden.name });
     }
     return out;
   });
@@ -136,7 +183,25 @@ function pickOption(opts, want) {
   return null; // exact and unique only: never guess
 }
 // The value attribute of a radio button is often not its label, so the position selects it.
-const checkRadio = (page, field, option) => page.locator(`input[type=radio][name="${field.name}"]`).nth(field.opts.indexOf(option)).check();
+// Some forms hide the input and show a styled label. Only the label can take the click.
+const checkInput = async input => {
+  if (await input.isVisible()) await input.check();
+  else await input.evaluate(el => el.labels[0].click());
+};
+const checkRadio = (page, field, option) => checkInput(page.locator(`input[type=radio][name="${field.name}"]`).nth(field.opts.indexOf(option)));
+const checkGroup = async (page, field, options) => {
+  for (const option of options) await checkInput(page.locator(`input[type=checkbox][name="${field.name}"]`).nth(field.opts.indexOf(option)));
+  return options;
+};
+// The position selects the option. An option in a closed category is not visible, so only its element can take the click.
+async function selectDropdown(page, field, option) {
+  const button = page.locator(`[data-agent-field="${field.id}"]`);
+  await button.scrollIntoViewIfNeeded(); await button.click();
+  const item = page.locator(`[id="${await button.getAttribute('aria-controls')}"] li`).nth(field.opts.indexOf(option));
+  if (await item.isVisible()) await item.click(); else await item.evaluate(el => el.click());
+  const stored = await page.locator(`input[type=hidden][name="${field.name}"]`).inputValue();
+  return stored ? option : null;
+}
 const comboMenu = page => page.locator('[role=listbox]:visible [role=option], .select__menu .select__option');
 async function fillCombo(page, loc, want, pick) {
   await loc.scrollIntoViewIfNeeded(); await loc.click();
@@ -167,9 +232,31 @@ export async function writeField(page, field, value) {
   const loc = page.locator(`[data-agent-field="${field.id}"]`);
   if (field.kind === 'select') { await loc.selectOption({ label: value }); return value; }
   if (field.kind === 'radio') { await checkRadio(page, field, value); return value; }
+  if (field.kind === 'dropdown') return selectDropdown(page, field, value);
+  if (field.kind === 'checkboxes') return checkGroup(page, field, [].concat(value));
   if (field.kind === 'combobox') { const r = await fillCombo(page, loc, value); return r.ok ? r.value : null; }
   await loc.fill(value);
   return value;
+}
+// A Greenhouse form shows one education entry. The undergraduate degree needs the second entry.
+// A value with no exact option stays for the user in Chrome, so that a choice about the degree is never a guess.
+async function addUndergraduate(page, entry, report) {
+  const entries = page.locator('.education--container .education--form');
+  if (!entry || await entries.count() !== 1) return;
+  const known = new Set((await scan(page)).map(f => f.id));
+  await page.locator('.education--container').getByRole('button', { name: /add another/i }).click();
+  await entries.nth(1).waitFor();
+  for (const f of (await scan(page)).filter(f => !known.has(f.id))) {
+    const want = entry[findRule(f.label)?.[1]];
+    const label = `Undergraduate ${f.label}`;
+    const loc = page.locator(`[data-agent-field="${f.id}"]`);
+    let written = null;
+    if (want !== undefined && f.kind === 'combobox') { const r = await fillCombo(page, loc, want); if (r.ok) written = r.value; }
+    else if (want !== undefined) { await loc.fill(String(want)); written = String(want); }
+    if (written === null) { report.review.push({ id: f.id, name: f.name, label, kind: f.kind, required: f.required, why: 'undergraduate_no_match', opts: f.opts }); continue; }
+    report.filled.push(`${label} = ${written.slice(0, 40)}`);
+    report.checks.push({ id: f.id, kind: f.kind, label, value: written });
+  }
 }
 export async function run(page, profile, { resume, seen = new Set(), company } = {}) {
   const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], checks: [], readback_failed: [] };
@@ -185,9 +272,19 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     const key = rule ? rule[1] : undefined;
     const log = v => { report.filled.push(`${f.label.slice(0, 40)} = ${String(v).slice(0, 40)}`); report.checks.push({ id: f.id, kind: f.kind, label: f.label, value: String(v) }); };
     const review = why => report.review.push({ id: f.id, name: f.name, label: f.label.slice(0, 300), kind: f.kind, required: f.required, why, opts: f.opts });
-    // An answer that the user gave for this question comes first.
     const clarified = f.kind === 'file' || f.kind === 'checkbox' ? null : findClarified(profile.clarified, f.label);
-    if (clarified !== null && (!f.opts || f.opts.includes(clarified))) {
+    // The user prefers some sources for every company, so the preference comes before a saved answer.
+    if (key === 'referral' && profile.referral) {
+      const opts = f.kind === 'combobox' ? await comboOptions(page, f.id) : f.opts;
+      const choice = opts?.length ? sourceChoice(opts, profile.referral) ?? (opts.includes(clarified) ? clarified : null) : [].concat(profile.referral)[0];
+      if (!choice) { review('source_no_match'); continue; }
+      const written = await writeField(page, f, choice);
+      if (written === null) review('write_failed'); else log(written);
+      continue;
+    }
+    // An answer that the user gave for this question comes first.
+    const fits = answer => (Array.isArray(answer) ? f.kind === 'checkboxes' && answer.every(a => f.opts.includes(a)) : !f.opts || f.opts.includes(answer));
+    if (clarified !== null && fits(clarified)) {
       const written = await writeField(page, f, clarified);
       if (written !== null) { log(written); continue; }
     }
@@ -207,17 +304,20 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     }
     if (key === null) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     if (key === undefined) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
-    const isChoice = ['select', 'radio', 'combobox'].includes(f.kind);
+    const isChoice = ['select', 'radio', 'combobox', 'dropdown'].includes(f.kind);
     if (YES_NO_KEYS.has(key) && (!isChoice || FOLLOW_UP.test(f.label))) { review('follow_up'); continue; }
     if (key === 'visa_type' && /need|require|sponsor/i.test(f.label)) { review('follow_up'); continue; }
     if ((key === 'authorized' || key === 'sponsorship') && !regionAllowed(f.label, profile.work_regions)) { review('region_not_configured'); continue; }
     if ((key === '__signature' || key === '__today') && !profile.auto_submit) { review('attestation_human_only'); continue; }
+    // The undergraduate degree has its own values. They do not mix with the values of the current school.
+    const source = UNDERGRADUATE.test(f.label) && profile.undergraduate ? profile.undergraduate : profile;
     const want = key === '__eeo' ? eeoChooser(f.label, profile)
       : key === 'worked_here_before' ? await workedHere(page, profile, f.label, company)
       : key === '__signature' || key === '__full_name' ? fullName(profile)
       : key === '__today' ? todayFor(f.kind)
       : key === 'gpa' ? gpaFor(f.label, profile)
-      : profile[key];
+      : f.kind === 'checkboxes' && key === 'discipline' && source.disciplines ? source.disciplines
+      : source[key];
     if (want === undefined) { review('no_profile_value'); continue; }
     if (f.kind === 'select') {
       const o = pickOption(f.opts, want); if (!o) { review('no_exact_option'); continue; }
@@ -225,12 +325,20 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     } else if (f.kind === 'radio') {
       const o = pickOption(f.opts, want); if (!o) { review('no_exact_option'); continue; }
       await checkRadio(page, f, o); log(o);
+    } else if (f.kind === 'dropdown') {
+      const o = pickOption(f.opts, want); if (!o) { review('no_exact_option'); continue; }
+      if (await selectDropdown(page, f, o)) log(o); else review('write_failed');
     } else if (f.kind === 'combobox') {
-      const r = await fillCombo(page, loc, want, profile[key + '_pick']);
+      const r = await fillCombo(page, loc, want, source[key + '_pick']);
       if (r.ok) log(r.value); else review('combobox_no_match:' + JSON.stringify(r.opts));
+    } else if (f.kind === 'checkboxes') {
+      const options = typeof want === 'function' ? [want(f.opts)] : [].concat(want).map(w => pickOption(f.opts, w));
+      if (!options.length || options.includes(null)) { review('no_exact_option'); continue; }
+      log(await checkGroup(page, f, options));
     } else if (typeof want === 'function') { review('no_exact_option'); } else { await loc.fill(String(want)); log(want); }
    }
   }
+  await addUndergraduate(page, profile.undergraduate, report);
   // Readback is the verdict: a field counts as filled only if the page still shows the value after settling.
   report.readback_failed = await verifyChecks(page, report.checks);
   return report;
@@ -245,12 +353,13 @@ export async function verifyChecks(page, checks) {
       if (!attached) failed.push(`${c.label.slice(0, 30)}: file "${c.value}" not attached`);
       continue;
     }
-    if (c.kind === 'radio' || c.kind === 'checkbox') continue;
-    const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate(el => {
+    if (c.kind === 'radio' || c.kind === 'checkbox' || c.kind === 'checkboxes') continue;
+    const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate((el, kind) => {
+      if (kind === 'dropdown') return (el.querySelector('input[type=hidden]') ?? el.parentElement.querySelector('input[type=hidden]')).value;
       const box = el.closest('.select__control, .select'); const single = box?.querySelector('.select__single-value');
       if (el.getAttribute('role') === 'combobox' && single) return single.textContent;
       if (el.tagName === 'SELECT') return el.options[el.selectedIndex]?.text;
-      return el.value; }).catch(() => '(missing)');
+      return el.value; }, c.kind).catch(() => '(missing)');
     const norm = s => String(s).replace(/\D/g, '');
     const text = String(got ?? '');
     const ok = got === c.value || (c.value.startsWith('(saved') && text) || (norm(c.value) && norm(text) === norm(c.value)) || text.trim() === c.value.split(' +')[0];

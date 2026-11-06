@@ -9,9 +9,13 @@ const ERROR_WAIT_MS = 5000, USER_WAIT_MS = 600000, POLL_MS = 500;
 export async function submitBlockers(page, report) {
   const blockers = report.review.filter(item => item.required).map(item => `${item.label.slice(0, 60)} (${item.why})`);
   for (const failed of report.readback_failed ?? []) blockers.push(`Readback: ${failed}`);
-  const invalid = await page.evaluate(() => [...document.querySelectorAll('form :invalid')]
-    .filter(el => el.tagName !== 'FORM' && el.tagName !== 'FIELDSET' && el.getClientRects().length)
+  const invalid = await page.evaluate(() => [...new Set([...document.querySelectorAll('form :invalid')]
+    // Each box in a group can stay required after another box is checked. One checked box answers the question.
+    .filter(el => el.tagName !== 'FORM' && el.tagName !== 'FIELDSET' && el.getClientRects().length
+      && !(el.type === 'checkbox' && el.name && document.querySelector(`input[type=checkbox][name="${el.name}"]:checked`)))
     .map(el => {
+      const legend = el.type === 'checkbox' && document.querySelectorAll(`input[type=checkbox][name="${el.name}"]`).length > 1 && el.closest('fieldset')?.querySelector('legend');
+      if (legend) return legend.innerText.trim();
       if (el.labels?.[0]) return el.labels[0].innerText.trim();
       if (el.name || el.id) return el.name || el.id;
       // A custom dropdown can keep a hidden required input with no label of its own.
@@ -20,7 +24,7 @@ export async function submitBlockers(page, report) {
         if (label) return label.innerText.trim();
       }
       return 'unnamed field';
-    }));
+    }))]);
   const plain = text => text.replace(/\*/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
   const listed = new Set(report.review.filter(item => item.required).map(item => plain(item.label)));
   for (const name of invalid) if (!listed.has(plain(name))) blockers.push(`Invalid: ${name.slice(0, 60)}`);

@@ -30,9 +30,9 @@ Return one answer for each field id:
 - Use only facts from the applicant data. Do not invent experience, numbers, or personal details.
 - If the applicant data does not support an answer, set the value to null.`;
 
-// Only required, non-sensitive fields that can hold text or one option go to the model.
+// Only required, non-sensitive fields that can hold text or one option go to the model. A question with many answers goes to the user.
 export const isEligible = item =>
-  item.required && ELIGIBLE.test(item.why) && !['file', 'checkbox'].includes(item.kind) && !SENSITIVE.test(item.label);
+  item.required && ELIGIBLE.test(item.why) && !['file', 'checkbox', 'checkboxes'].includes(item.kind) && !SENSITIVE.test(item.label);
 
 export function buildUserPrompt(items, context, jobText, revision) {
   return JSON.stringify({
