@@ -32,9 +32,11 @@ export async function applyToJob({ url, profilePath, resume, provider = null, no
     }
   }
   async function confirmResume(choice) {
-    const { candidates, selected, tailored } = choice;
+    const { candidates, selected, tailored, tailorError } = choice;
     say(`\n${formatResumeChoice(choice)}\n`);
-    if (selected && await acceptAutomatically(selected.path, profile.resume_library, provider, say)) return { action: 'accept' };
+    // The job needs a tailored resume, and the recommendation is only the nearest other resume: the user decides.
+    if (tailorError) say('Tailoring failed, so the agent does not accept a resume by itself.');
+    else if (selected && await acceptAutomatically(selected.path, profile.resume_library, provider, say)) return { action: 'accept' };
     if (tailored) io.attach?.(tailored.path);
     for (;;) {
       const answer = (await ask(`Enter ${selected ? 'a to accept the recommendation, ' : ''}a resume id, p for a path, or s for no resume: `)).trim().toLowerCase();

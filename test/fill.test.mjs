@@ -27,20 +27,21 @@ const CODE_FORM = `<title>Intern at Acme</title><h1>Intern</h1><form id="apply">
   <button type="submit">Submit application</button>
 </form><script>document.getElementById('apply').addEventListener('submit', e => { e.preventDefault(); document.body.innerHTML = '<p>Enter your verification code</p>'; });</script>`;
 
+const TAILOR_JOB = 'This job page asks for a tailored resume.';
 const answer = data => JSON.stringify({ choices: [{ message: { content: JSON.stringify(data) } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
 let base;
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
-    if (req.method === 'GET') { res.setHeader('Content-Type', 'text/html'); res.end(req.url === '/code' ? CODE_FORM : FORM); return; }
+    if (req.method === 'GET') { res.setHeader('Content-Type', 'text/html'); res.end(req.url === '/code' ? CODE_FORM : req.url === '/tailor' ? `<p>${TAILOR_JOB}</p>${FORM}` : FORM); return; }
     const request = JSON.parse(body);
     if (request.messages[0].content.includes('final check')) {
       res.end(answer({ ok: true, problems: [] }));
       return;
     }
     if (request.messages[0].content.includes('one resume')) {
-      res.end(answer({ resume_id: 'r1', tailor_recommended: false, reason: 'It fits the role.', company: 'Acme', role: 'Intern' }));
+      res.end(answer({ resume_id: 'r1', tailor_recommended: request.messages[1].content.includes(TAILOR_JOB), reason: 'It fits the role.', company: 'Acme', role: 'Intern' }));
       return;
     }
     const { fields, applicant_feedback: feedback } = JSON.parse(request.messages[1].content);
@@ -170,6 +171,34 @@ test('a resume that passes the check is accepted with no question', async () => 
   assert.match(out, /The resume passed the check\. The agent accepts it\./);
   assert.doesNotMatch(out, /a resume id, p for a path/);
   assert.match(out, /Resume: +Alex_Rivera_SWE\.pdf/);
+});
+
+test('a failed tailoring run does not accept the other resume with no question', async () => {
+  const cwd = newFolder();
+  const pdf = path.join(cwd, 'general', 'SWE', 'Alex_Rivera_SWE.pdf');
+  fs.mkdirSync(path.dirname(pdf), { recursive: true });
+  fs.mkdirSync(path.join(cwd, 'targeted'));
+  fs.mkdirSync(path.join(cwd, 'bin'));
+  fs.writeFileSync(path.join(cwd, 'bin', 'claude'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const page = await browser.newPage();
+  await page.setContent('<p>Alex Rivera</p><p>Built a data pipeline.</p>');
+  await page.pdf({ path: pdf });
+  await browser.close();
+  const profile = writeProfile(cwd, { resume_library: {
+    language: 'any', tailor_policy: 'Tailor this job.', tailor: { skill: 'resume-skill' }, auto_accept: { max_pages: 2, must_include: ['Alex Rivera'] },
+    roots: [{ dir: path.join(cwd, 'general'), kind: 'general' }, { dir: path.join(cwd, 'targeted'), kind: 'targeted' }],
+  } });
+  const { out, err, code } = await runFill([`${base}/tailor`, profile, '--model', '--no-submit'], [
+    ['a resume id, p for a path, or s for no resume: ', 's'],
+    ['[a]ccept, [e]dit, [r]evise, or [s]kip? ', 'a'],
+    ['Enter a number, or press Enter to answer on the form: ', '1'],
+  ], cwd, { PATH: `${path.join(cwd, 'bin')}:${process.env.PATH}` });
+  assert.equal(err, '');
+  assert.equal(code, 0);
+  assert.match(out, /Tailoring failed\./);
+  assert.match(out, /Tailoring failed, so the agent does not accept a resume by itself\./);
+  assert.doesNotMatch(out, /The agent accepts it/);
 });
 
 test('the submission step gets the profile, so the emailed code module can start', async () => {
