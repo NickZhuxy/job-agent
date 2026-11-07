@@ -3,7 +3,8 @@
 const CONFIRMED = /thank you for (applying|your application)|application (has been |was )?(received|submitted)|successfully (submitted|applied)|(we.?ve|we have) received your application/i;
 const CHALLENGE_FRAMES = 'iframe[src*="recaptcha"][src*="bframe"], iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare"], iframe[title*="challenge" i]';
 const CODE_REQUEST = /(verification|security|confirmation) code/i;
-const ERROR_WAIT_MS = 5000, USER_WAIT_MS = 600000, POLL_MS = 500;
+// A form can send the file and pass a reCAPTCHA check before the confirmation appears.
+const ERROR_WAIT_MS = 5000, CONFIRM_WAIT_MS = 45000, USER_WAIT_MS = 600000, POLL_MS = 500;
 
 // Lists the reasons not to submit. An empty list means that the form is ready.
 export async function submitBlockers(page, report) {
@@ -66,22 +67,33 @@ async function tryEmailedCode(page, profile, options) {
   }
 }
 
-export async function submitApplication(page, report, { say = () => {}, canWait = true, userWaitMs = USER_WAIT_MS, profile, env } = {}) {
+// Jane Street rejects a resume on a Mac if more than 90 seconds pass between the file selection and the submission.
+// On other sites a new selection can start a resume parser, which can change the fields.
+const RESELECT_RESUME = /(^|\.)janestreet\.com$/;
+const reselectResume = async (page, resume) => {
+  if (resume && RESELECT_RESUME.test(new URL(page.url()).hostname)) await page.locator('form input[type=file]').first().setInputFiles(resume);
+};
+// A page can show the confirmation in a dialog and keep the form behind it.
+const confirmedInDialog = page => page.evaluate(source => [...document.querySelectorAll('.modal, [role=dialog]')]
+  .some(el => el.getClientRects().length && new RegExp(source, 'i').test(el.innerText)), CONFIRMED.source);
+
+export async function submitApplication(page, report, { say = () => {}, canWait = true, userWaitMs = USER_WAIT_MS, confirmWaitMs = CONFIRM_WAIT_MS, profile, env, resume } = {}) {
   const blockers = await submitBlockers(page, report);
   if (blockers.length) return { submitted: false, why: 'form_not_ready', blockers };
   const button = await findSubmitButton(page);
   if (!button) return { submitted: false, why: 'no_submit_button' };
 
+  await reselectResume(page, resume);
   const startUrl = page.url();
   const clickedAt = Date.now();
   await button.click();
   let started = clickedAt;
   let told = false, codeTried = false;
-  while (Date.now() - started < (told ? userWaitMs : ERROR_WAIT_MS)) {
+  while (Date.now() - started < (told ? userWaitMs : confirmWaitMs)) {
     await page.waitForTimeout(POLL_MS);
     const text = await page.locator('body').innerText().catch(() => '');
     // Job text can also thank the reader, so the page must also change.
-    const formGone = page.url() !== startUrl || !await button.isVisible().catch(() => false);
+    const formGone = page.url() !== startUrl || !await button.isVisible().catch(() => false) || await confirmedInDialog(page);
     if (CONFIRMED.test(text) && formGone) return { submitted: true, url: page.url() };
     const challenge = await challengeVisible(page);
     if (challenge || CODE_REQUEST.test(text)) {
@@ -100,8 +112,9 @@ export async function submitApplication(page, report, { say = () => {}, canWait 
       told = true;
       continue;
     }
-    const errors = await page.evaluate(() => [...document.querySelectorAll('[aria-invalid="true"], .error, .field-error, [role=alert]')]
-      .filter(el => el.getClientRects().length).map(el => (el.innerText || el.name || el.id || '').trim()).filter(Boolean).slice(0, 5));
+    // A form can report a failed request in a dialog and keep the values.
+    const errors = await page.evaluate(() => [...document.querySelectorAll('[aria-invalid="true"], .error, .field-error, [role=alert], .modal, [role=dialog]')]
+      .filter(el => el.getClientRects().length && (!el.matches('.modal, [role=dialog]') || /\berror\b/i.test(el.innerText))).map(el => (el.innerText || el.name || el.id || '').trim()).filter(Boolean).slice(0, 5));
     if (errors.length && Date.now() - started >= ERROR_WAIT_MS - POLL_MS) return { submitted: false, why: 'form_errors', errors };
   }
   return { submitted: false, why: 'not_confirmed', clicked: true };
