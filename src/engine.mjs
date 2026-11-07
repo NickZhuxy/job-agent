@@ -268,7 +268,7 @@ async function addUndergraduate(page, entry, report) {
   }
 }
 export async function run(page, profile, { resume, seen = new Set(), company } = {}) {
-  const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], checks: [], readback_failed: [] };
+  const report = { total: 0, passes: 0, filled: [], review: [], skipped: [], optional: [], checks: [], readback_failed: [] };
   // Fields can appear after earlier answers, so scan again until no new field shows up.
   for (let pass = 0; pass < 4; pass++) {
    const fields = (await scan(page)).filter(f => !seen.has(f.kind + '|' + f.label + '|' + f.name));
@@ -280,7 +280,8 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     const rule = findRule(f.label);
     const key = rule ? rule[1] : undefined;
     const log = v => { report.filled.push(`${f.label.slice(0, 40)} = ${String(v).slice(0, 40)}`); report.checks.push({ id: f.id, kind: f.kind, label: f.label, value: String(v) }); };
-    const review = why => report.review.push({ id: f.id, name: f.name, label: f.label.slice(0, 300), kind: f.kind, required: f.required, why, opts: f.opts });
+    const item = why => ({ id: f.id, name: f.name, label: f.label.slice(0, 300), kind: f.kind, required: f.required, why, opts: f.opts });
+    const review = why => report.review.push(item(why));
     // The review item keeps 300 characters of the label, so the saved question has this length too.
     const clarified = f.kind === 'file' || f.kind === 'checkbox' ? null : findClarified(profile.clarified, f.label.slice(0, 300));
     // The user prefers some sources for every company, so the preference comes before a saved answer.
@@ -316,7 +317,11 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     const approved = f.kind === 'text' && key === undefined ? profile.answers?.[f.label.toLowerCase()] : undefined;
     if (approved !== undefined) { await loc.fill(approved); log(approved); continue; }
     if (key === null) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
-    if (key === undefined) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
+    if (key === undefined) {
+      if (f.required) review('no_rule');
+      else { report.skipped.push(f.label.slice(0, 40)); report.optional.push(item('optional')); }
+      continue;
+    }
     const isChoice = ['select', 'radio', 'combobox', 'dropdown'].includes(f.kind);
     if (YES_NO_KEYS.has(key) && (!isChoice || FOLLOW_UP.test(f.label))) { review('follow_up'); continue; }
     if (key === 'visa_type' && /need|require|sponsor/i.test(f.label)) { review('follow_up'); continue; }
@@ -369,8 +374,9 @@ export async function verifyChecks(page, checks) {
     if (c.kind === 'radio' || c.kind === 'checkbox' || c.kind === 'checkboxes') continue;
     const got = await page.locator(`[data-agent-field="${c.id}"]`).evaluate((el, kind) => {
       if (kind === 'dropdown') return (el.querySelector('input[type=hidden]') ?? el.parentElement.querySelector('input[type=hidden]')).value;
-      const box = el.closest('.select__control, .select'); const single = box?.querySelector('.select__single-value');
-      if (el.getAttribute('role') === 'combobox' && single) return single.textContent;
+      const box = el.closest('.select__control, .select');
+      const chosen = [...(box?.querySelectorAll('.select__single-value, .select__multi-value__label') ?? [])].map(value => value.textContent);
+      if (el.getAttribute('role') === 'combobox' && chosen.length) return chosen.join(', ');
       if (el.tagName === 'SELECT') return el.options[el.selectedIndex]?.text;
       return el.value; }, c.kind).catch(() => '(missing)');
     const norm = s => String(s).replace(/\D/g, '');

@@ -147,6 +147,15 @@ The setup saves your answers to these questions. The agent then uses these rules
 
 The agent asks you about follow-up questions, such as the type of visa that you will need. It saves your answer in `profile.local.json` and does not ask the same question again. It also uses the answer for a nearly identical question. The saved answers go on the form, and you examine the form before you submit it.
 
+The agent also asks you about an optional question if it has no rule for the question. Press Enter to skip the question. The agent does not stop the submission for a skipped optional question. It does not ask about these optional items:
+
+- A question that applies only after another answer, such as "If you said yes above"
+- A demographic, visa, or work authorization question
+- A file, such as a cover letter
+- A checkbox
+
+The agent enters your text in the form exactly as you type it. It does not correct or translate the text. It also uses the text for a nearly identical question on a different form.
+
 The profile does not store passwords or social security numbers. The model does not get these questions, demographic questions, visa questions, or questions that ask for all the schools that you attended.
 
 ## Sign and submit automatically
