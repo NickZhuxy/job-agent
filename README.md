@@ -301,6 +301,8 @@ The agent does these checks in this sequence:
 
 If a check finds a problem or cannot complete, the agent shows the problem and you decide.
 
+If tailoring fails, the agent does not do the checks and you decide.
+
 Limits:
 
 - The checks do not find a claim that is false. Read each resume that you did not write.
