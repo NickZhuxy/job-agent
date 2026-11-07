@@ -281,7 +281,8 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
     const key = rule ? rule[1] : undefined;
     const log = v => { report.filled.push(`${f.label.slice(0, 40)} = ${String(v).slice(0, 40)}`); report.checks.push({ id: f.id, kind: f.kind, label: f.label, value: String(v) }); };
     const review = why => report.review.push({ id: f.id, name: f.name, label: f.label.slice(0, 300), kind: f.kind, required: f.required, why, opts: f.opts });
-    const clarified = f.kind === 'file' || f.kind === 'checkbox' ? null : findClarified(profile.clarified, f.label);
+    // The review item keeps 300 characters of the label, so the saved question has this length too.
+    const clarified = f.kind === 'file' || f.kind === 'checkbox' ? null : findClarified(profile.clarified, f.label.slice(0, 300));
     // The user prefers some sources for every company, so the preference comes before a saved answer.
     if (key === 'referral' && profile.referral) {
       const opts = f.kind === 'combobox' ? await comboOptions(page, f.id) : f.opts;
@@ -311,6 +312,9 @@ export async function run(page, profile, { resume, seen = new Set(), company } =
       else if (key === 'resume') review('upload_disabled'); else report.skipped.push(f.label.slice(0, 40));
       continue;
     }
+    // A text answer that the user approved stays valid for the same question.
+    const approved = f.kind === 'text' && key === undefined ? profile.answers?.[f.label.toLowerCase()] : undefined;
+    if (approved !== undefined) { await loc.fill(approved); log(approved); continue; }
     if (key === null) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     if (key === undefined) { (f.required ? review('no_rule') : report.skipped.push(f.label.slice(0, 40))); continue; }
     const isChoice = ['select', 'radio', 'combobox', 'dropdown'].includes(f.kind);

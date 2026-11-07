@@ -87,7 +87,7 @@ test('page errors are reported, and the agent does not click again', async () =>
 
 test('text on the job page is not a confirmation', async () => {
   const { page, report } = await filled('nothing');
-  const result = await submitApplication(page, report, {});
+  const result = await submitApplication(page, report, { confirmWaitMs: 5000 });
   assert.equal(result.submitted, false);
   assert.equal(result.why, 'not_confirmed');
   await page.close();

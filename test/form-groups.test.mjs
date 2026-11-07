@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { chromium } from 'playwright-core';
 import { run, scan } from '../src/engine.mjs';
 import { clarifyFields, needsUser } from '../src/clarify.mjs';
 import { isEligible } from '../src/model.mjs';
-import { submitBlockers } from '../src/submit.mjs';
+import { submitApplication, submitBlockers } from '../src/submit.mjs';
 
 let browser;
 test.before(async () => { browser = await chromium.launch({ channel: 'chrome', headless: true }); });
@@ -235,4 +238,83 @@ test('a text question gets the first source', async () => {
   const page = await form('<label for="h">How did you hear about us?</label><input id="h" type="text">');
   await run(page, SOURCE);
   assert.equal(await page.locator('#h').inputValue(), 'LinkedIn');
+});
+
+test('a saved answer to a long question is found again', async () => {
+  const question = `Do you need a visa? ${'Read this long text about visas and travel. '.repeat(10)}`;
+  const page = await form(`<label for="v">${question}</label><select id="v" required><option>Select</option><option>No</option><option>Yes</option></select>`);
+  const profile = { ...CURRENT };
+  const seen = new Set();
+  const report = await run(page, profile, { seen });
+  await clarifyFields(page, profile, report, { ask: async () => '1', say: () => {}, onSave: () => {}, refill: () => run(page, profile, { seen }) });
+  const again = await form(`<label for="v">${question}</label><select id="v" required><option>Select</option><option>No</option><option>Yes</option></select>`);
+  const next = await run(again, profile);
+  assert.equal(await again.locator('#v option:checked').innerText(), 'No');
+  assert.deepEqual(next.review, []);
+});
+
+test('an approved text answer is used again for the same question only', async () => {
+  const page = await form(`<label for="e">Current or most recent employer</label><input id="e" type="text" required>
+    <label for="o">Most recent employer in your country</label><input id="o" type="text" required>`);
+  const report = await run(page, { answers: { 'current or most recent employer': 'Example Corp' } });
+  assert.equal(await page.locator('#e').inputValue(), 'Example Corp');
+  assert.equal(await page.locator('#o').inputValue(), '');
+  assert.equal(report.review[0].label, 'Most recent employer in your country');
+});
+
+// The page keeps the form behind a dialog after the submission. It counts each selection of a file.
+const DIALOG_FORM = `<form onsubmit="event.preventDefault(); document.getElementById('thanks').style.display = 'block'">
+  <input type="file" name="resume" onchange="window.selections = (window.selections || 0) + 1">
+  <button type="submit">Submit</button></form>
+  <div id="thanks" class="modal" style="display: none">Thank you for your application.</div>`;
+const openAt = async url => {
+  const page = await browser.newPage();
+  await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: DIALOG_FORM }));
+  await page.goto(url);
+  return page;
+};
+const EMPTY_REPORT = { review: [], readback_failed: [] };
+const pdf = () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'resume-')), 'resume.pdf');
+  fs.writeFileSync(file, '%PDF-1.4');
+  return file;
+};
+
+test('a confirmation in a dialog counts, and Jane Street gets the resume again before the click', async () => {
+  const page = await openAt('https://www.janestreet.com/apply');
+  const result = await submitApplication(page, EMPTY_REPORT, { resume: pdf() });
+  assert.equal(result.submitted, true);
+  assert.equal(await page.evaluate(() => window.selections), 1);
+});
+
+test('other sites do not get the resume again', async () => {
+  const page = await openAt('https://jobs.example.com/apply');
+  const result = await submitApplication(page, EMPTY_REPORT, { resume: pdf() });
+  assert.equal(result.submitted, true);
+  assert.equal(await page.evaluate(() => window.selections), undefined);
+});
+
+test('a confirmation in a hidden dialog does not count', async () => {
+  const page = await browser.newPage();
+  await page.setContent('<form onsubmit="event.preventDefault()"><button type="submit">Submit</button></form><div class="modal" style="display: none">Thank you for your application.</div>');
+  const result = await submitApplication(page, EMPTY_REPORT, { canWait: false, confirmWaitMs: 1000 });
+  assert.equal(result.submitted, false);
+});
+
+test('the agent waits for a confirmation that appears after the error wait', async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<form onsubmit="event.preventDefault(); setTimeout(() => document.getElementById('thanks').style.display = 'block', 6000)"><button type="submit">Submit</button></form>
+    <div id="thanks" class="modal" style="display: none">Thank you for your application.</div>`);
+  const result = await submitApplication(page, EMPTY_REPORT, {});
+  assert.equal(result.submitted, true);
+});
+
+test('an error in a dialog is a form error, so the report does not say that the result is unknown', async () => {
+  const page = await browser.newPage();
+  await page.setContent(`<form onsubmit="event.preventDefault(); document.getElementById('failed').style.display = 'block'"><button type="submit">Submit</button></form>
+    <div id="failed" class="modal" style="display: none">There was an error processing your application.</div>
+    <div class="modal" style="display: none">Thank you for your application.</div>`);
+  const result = await submitApplication(page, EMPTY_REPORT, {});
+  assert.equal(result.why, 'form_errors');
+  assert.match(result.errors[0], /error processing/);
 });

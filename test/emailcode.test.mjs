@@ -173,7 +173,7 @@ const openForm = async (url = 'https://job-boards.greenhouse.io/acme/jobs/1', bo
   await page.goto(url);
   return page;
 };
-const options = (fake, fields = {}) => { const said = []; return { said, opts: { say: line => said.push(line), userWaitMs: 800, profile: ON, env: fake.env, ...fields } }; };
+const options = (fake, fields = {}) => { const said = []; return { said, opts: { say: line => said.push(line), confirmWaitMs: 5000, userWaitMs: 800, profile: ON, env: fake.env, ...fields } }; };
 
 test('with the module on, the agent enters the code in the Greenhouse boxes and submits the step one time', async () => {
   const page = await openForm();
