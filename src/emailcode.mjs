@@ -139,7 +139,8 @@ export function checkReply(reply, messages, platform, clickedAt) {
   const message = messages.get(id);
   if (!message) return { error: 'The result names a message that the tool did not read.' };
   if (!platform.sender.test(String(message.sender ?? ''))) return { error: 'The message is not from this platform.' };
-  if (!(Number(message.internalDate) >= clickedAt)) return { error: 'The message is older than the submit click.' };
+  // The new mail can arrive after the search finds an earlier one, so the search starts again.
+  if (!(Number(message.internalDate) >= clickedAt)) return { error: 'The message is older than the submit click.', stale: true };
   const lone = new RegExp(`(^|[^A-Za-z0-9])${code}($|[^A-Za-z0-9])`);
   if (!lone.test(`${message.plaintextBody ?? ''}\n${message.htmlBody ?? ''}`)) return { error: 'The message does not contain the code.' };
   return { code };
@@ -147,19 +148,21 @@ export function checkReply(reply, messages, platform, clickedAt) {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Mail can take some time. Only "no message yet" starts a new search. Each other problem stops the attempt.
+// Mail can take some time. Only "no message yet" and "only an older message" start a new search. Each other problem stops the attempt.
 export async function getEmailCode(platform, clickedAt, { env = process.env, waitMs = WAIT_SECONDS * 1000 } = {}) {
   const query = searchQuery(platform, clickedAt);
   const pollMs = Math.min(MAX_POLL_MS, waitMs / 4);
   const deadline = Date.now() + waitMs;
+  let stale = null;
   do {
     await sleep(pollMs);
     const { messages, reply, problem } = await runTool(codeCommand(query), { query, env, timeoutMs: Math.min(MAX_RUN_MS, waitMs) });
     if (problem) return { error: problem };
     const verdict = checkReply(reply, messages, platform, clickedAt);
-    if (!verdict.none) return verdict;
+    if (verdict.stale) stale = { error: verdict.error };
+    else if (!verdict.none) return verdict;
   } while (Date.now() + pollMs < deadline);
-  return { error: `No code arrived in ${Math.round(waitMs / 1000)} seconds.` };
+  return stale ?? { error: `No code arrived in ${Math.round(waitMs / 1000)} seconds.` };
 }
 
 async function codeBoxes(page, platform) {

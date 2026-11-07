@@ -116,7 +116,8 @@ test('a malicious email does not give a code, also if the model obeys it', async
   assert.match((await ask(widens)).error, /changed the search/);
 
   const oldMail = fakeClaude(`${READS} mail({ internalDate: '1000' }); ${FOUND}`);
-  assert.match((await ask(oldMail)).error, /older/);
+  assert.match((await ask(oldMail, 1000)).error, /older/);
+  assert.ok(oldMail.runs().length > 1, 'an older message starts a new search');
 });
 
 test('a result with the wrong format stops the attempt, with no second search', async () => {
@@ -129,6 +130,10 @@ test('the agent searches again only while no mail has arrived', async () => {
   const late = fakeClaude(`if (run === 1) { init(); call(G + 'search_threads', { query, pageSize: 5 }); reply({ found: false }); } else { ${GOOD} }`);
   assert.deepEqual(await ask(late, 3000), { code: CODE });
   assert.equal(late.runs().length, 2);
+
+  const before = fakeClaude(`if (run === 1) { ${READS} mail({ internalDate: '1000' }); ${FOUND} } else { ${GOOD} }`);
+  assert.deepEqual(await ask(before, 3000), { code: CODE }, 'the new mail arrives after an older one');
+  assert.equal(before.runs().length, 2);
 
   const never = fakeClaude(`init(); reply({ found: false });`);
   assert.match((await ask(never, 1000)).error, /No code arrived/);
