@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { chromium } from 'playwright-core';
-import { run, scan } from '../src/engine.mjs';
+import { run, scan, verifyChecks } from '../src/engine.mjs';
 import { clarifyFields, needsUser } from '../src/clarify.mjs';
 import { isEligible } from '../src/model.mjs';
 import { submitApplication, submitBlockers } from '../src/submit.mjs';
@@ -317,4 +317,47 @@ test('an error in a dialog is a form error, so the report does not say that the 
   const result = await submitApplication(page, EMPTY_REPORT, {});
   assert.equal(result.why, 'form_errors');
   assert.match(result.errors[0], /error processing/);
+});
+
+test('a choice in a multi-select dropdown counts as written', async () => {
+  const page = await form(`<div class="select__control"><div class="select__multi-value__label">Master’s</div><input id="d" role="combobox" data-agent-field="f1"></div>`);
+  assert.deepEqual(await verifyChecks(page, [{ id: 'f1', kind: 'combobox', label: 'Degree', value: 'Master’s' }]), []);
+  const empty = await form('<div class="select__control"><input id="d" role="combobox" data-agent-field="f1"></div>');
+  assert.equal((await verifyChecks(empty, [{ id: 'f1', kind: 'combobox', label: 'Degree', value: 'Master’s' }])).length, 1);
+});
+
+const OPTIONAL = `<label for="o">Other than the posted location, which offices interest you?</label><input id="o" type="text">
+  <label for="c">If you said yes above, please tell us more.</label><input id="c" type="text">
+  <label for="g">Were you ever convicted of a crime?</label><input id="g" type="text">
+  <label for="f">Cover Letter</label><input id="f" type="file">`;
+
+test('an optional question goes to the user, and the answer stays for the next form', async () => {
+  const page = await form(OPTIONAL);
+  const profile = { ...CURRENT };
+  const seen = new Set();
+  const report = await run(page, profile, { seen });
+  const said = [];
+  const asked = [];
+  await clarifyFields(page, profile, report, { ask: async question => { asked.push(question); return 'Hong Kong'; }, say: line => said.push(line), onSave: () => {}, refill: () => run(page, profile, { seen }) });
+  assert.equal(asked.length, 1, 'a conditional question, a sensitive question, and a file do not go to the user');
+  assert.match(said.join('\n'), /The form asks \(optional\): Other than the posted location/);
+  assert.match(said.join('\n'), /exactly as you type it/);
+  assert.equal(await page.locator('#o').inputValue(), 'Hong Kong');
+  assert.ok(report.filled.some(line => /Hong Kong \(from you\)/.test(line)));
+  assert.ok(!report.skipped.some(line => line.startsWith('Other than')));
+  assert.deepEqual(report.review, []);
+  const again = await form(OPTIONAL);
+  await run(again, profile);
+  assert.equal(await again.locator('#o').inputValue(), 'Hong Kong');
+});
+
+test('an optional question that the user skips does not stop the submission', async () => {
+  const page = await form(OPTIONAL);
+  const profile = { ...CURRENT };
+  const report = await run(page, profile);
+  await clarifyFields(page, profile, report, { ask: async () => '', say: () => {}, onSave: () => {}, refill: () => run(page, profile) });
+  assert.deepEqual(report.review, []);
+  assert.ok(report.skipped.some(line => line.startsWith('Other than')));
+  assert.equal(profile.clarified, CURRENT.clarified);
+  assert.deepEqual(await submitBlockers(page, report), []);
 });
