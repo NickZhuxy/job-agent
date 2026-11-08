@@ -47,7 +47,13 @@ const EDUCATION_SCRIPT = `
   };
   document.addEventListener('click', event => { if (event.target.matches('[role=combobox]')) show(event.target); });
   document.addEventListener('input', event => { if (event.target.matches('[role=combobox]')) show(event.target); });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') document.querySelector('.select__menu')?.remove(); });
+  // Like the real component, Escape removes typed text that is not an option.
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    document.querySelector('.select__menu')?.remove();
+    const input = event.target;
+    if (input.matches?.('[role=combobox]') && !choices[input.id.split('--')[0]].includes(input.value)) input.value = '';
+  });
   document.getElementById('add').addEventListener('click', () => {
     const count = document.querySelectorAll('.education--form').length;
     document.getElementById('add').insertAdjacentHTML('beforebegin', ${JSON.stringify(entry('COUNT'))}.replaceAll('COUNT', count));
@@ -87,14 +93,21 @@ test('without undergraduate data the form keeps one education entry', async () =
   assert.equal(await page.locator('.education--form').count(), 1);
 });
 
-test('an undergraduate value with no exact option goes to the user in Chrome, not to the model', async () => {
+test('an undergraduate value with no exact option goes to the user, not to the model', async () => {
   const page = await form(EDUCATION, EDUCATION_SCRIPT);
-  const report = await run(page, { ...CURRENT, undergraduate: { ...UNDERGRADUATE, discipline: 'Mathematics & Computer Science' } });
+  const profile = { ...CURRENT, undergraduate: { ...UNDERGRADUATE, discipline: 'Mathematics & Computer Science' } };
+  const report = await run(page, profile);
   const item = report.review.find(i => i.label === 'Undergraduate Discipline');
   assert.equal(item.why, 'undergraduate_no_match');
   assert.equal(item.required, true);
   assert.equal(isEligible(item), false);
-  assert.equal(needsUser(item), false);
+  assert.equal(needsUser(item), true);
+  const said = [];
+  const none = { filled: [], skipped: [], checks: [], review: [], optional: [], total: 0, passes: 0 };
+  await clarifyFields(page, profile, report, { ask: async () => '3', say: line => said.push(line), refill: async () => none });
+  assert.ok(said.includes('  3. Mathematics'));
+  assert.equal(await value(page, 'discipline--1'), 'Mathematics');
+  assert.equal(report.review.includes(item), false);
 });
 
 test('a question about undergraduate study gets the undergraduate school', async () => {

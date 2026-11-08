@@ -114,7 +114,7 @@ Agent 分为三层。Playwright 是操作浏览器的程序库。CAPTCHA 是识�
 
 Agent 在两种情况下使用这些值：
 
-- 表格的教育部分有 “Add another” 按钮（Greenhouse）。Agent 添加第二组教育信息并填写。如果某个值没有完全一致的选项，这个字段留给你填，Agent 不提交表格。
+- 表格的教育部分有 “Add another” 按钮（Greenhouse）。Agent 添加第二组教育信息并填写。如果某个值没有完全一致的选项，Agent 列出选项并请你选一个。如果你不选，这个字段留空，Agent 不提交表格。
 - 问题中包含 “undergraduate” 或 “bachelor”。
 
 如果表格要求列出上过的所有学校，Agent 不回答，它会问你。

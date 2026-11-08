@@ -15,9 +15,13 @@ export const RULES = [
   [/cover letter/i, null], [/resume|\bcv\b/i, 'resume'],
   // The education section of a form uses these short labels. A job start date is a different question.
   [/^start date month/i, 'edu_start_month'], [/^start date year/i, 'edu_start_year'], [/^end date month/i, 'grad_month'], [/^end date year/i, 'grad_year'],
-  [/graduation month/i, 'grad_month'], [/graduation year/i, 'grad_year'], [/graduation date/i, 'grad_term'], [/\bgpa\b/i, 'gpa'],
+  [/graduation month/i, 'grad_month'], [/graduation year/i, 'grad_year'], [/graduation date/i, 'grad_term'],
+  // A question that also asks for the maximum of the grading scale needs more than the GPA value. It has no rule.
+  [/\bmaximum\b.*\b(gpa|grade)|\b(gpa|grade)\b.*\bmaximum\b/i, undefined], [/\bgpa\b/i, 'gpa'],
   [/school|university/i, 'school'], [/degree/i, 'degree'], [/discipline|major|field of study/i, 'discipline'],
   [/visa type/i, 'visa_type'], [/sponsor/i, 'sponsorship'], [/authorized|eligible to work/i, 'authorized'],
+  // The start date is for the internship. A start date for a full-time role is a different question, with no rule.
+  [/(full.?time|permanent|graduate (role|position|job))\b.*\bstart\b|\bstart\b.*\b(full.?time|permanent|graduate (role|position|job))/i, undefined],
   [/start date|available to start|earliest .*start/i, 'start_date'], [/worked (for|at|with)|(previously|ever|been) employed (by|at|with)|former employee/i, 'worked_here_before'],
   [/gender|\bsex\b|hispanic|latin[oax]|\brace\b|ethnic|veteran|military|disabilit|sexual|lgbt/i, '__eeo'],
 ];
@@ -248,7 +252,7 @@ export async function writeField(page, field, value) {
   return value;
 }
 // A Greenhouse form shows one education entry. The undergraduate degree needs the second entry.
-// A value with no exact option stays for the user in Chrome, so that a choice about the degree is never a guess.
+// A value with no exact option goes to the user, not to the model, so that a choice about the degree is never a guess.
 async function addUndergraduate(page, entry, report) {
   const entries = page.locator('.education--container .education--form');
   if (!entry || await entries.count() !== 1) return;
