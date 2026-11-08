@@ -114,7 +114,7 @@ The setup collects your current school only. To give your undergraduate degree, 
 
 The agent uses these values in two conditions:
 
-- The form has an education section with an "Add another" button (Greenhouse). The agent adds a second entry and fills it. If a value has no exact option, the field stays empty for you, and the agent does not submit the form.
+- The form has an education section with an "Add another" button (Greenhouse). The agent adds a second entry and fills it. If a value has no exact option, the agent shows you the options and asks you to select one. If you do not select an option, the field stays empty, and the agent does not submit the form.
 - The question contains "undergraduate" or "bachelor".
 
 The agent does not answer a question about all schools that you attended. It asks you.

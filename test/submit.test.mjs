@@ -120,10 +120,12 @@ test('real form labels go to the correct values', async () => {
   const fields = {
     a: 'Start date year', b: 'Start date month', c: 'End date year', d: 'End date month', e: 'Earliest start date',
     f: 'What grade did you achieve in your Bachelors (or equivalent) degree?', g: 'What Masters degree qualification do you expect to be awarded?', h: 'Degree', i: 'School',
+    j: 'When will you be available to start a permanent, full-time graduate role?', k: 'GPA (4.0 scale)',
+    l: 'Please indicate your current Grade Point Average (GPA), or equivalent, and the maximum GPA/equivalent on the grading scale used by your institution.',
   };
   await page.setContent(`<form>${Object.entries(fields).map(([id, label]) => `<label for="${id}">${label}</label><input id="${id}">`).join('')}</form>`);
   await run(page, { ...PROFILE, edu_start_year: '2026', edu_start_month: 'September', grad_year: '2027', grad_month: 'December', start_date: '2027-05-31', degree: "Master's", school: 'Columbia' });
-  assert.deepEqual(await page.evaluate(ids => ids.map(id => document.getElementById(id).value), Object.keys(fields)), ['2026', 'September', '2027', 'December', '2027-05-31', '', '', "Master's", 'Columbia']);
+  assert.deepEqual(await page.evaluate(ids => ids.map(id => document.getElementById(id).value), Object.keys(fields)), ['2026', 'September', '2027', 'December', '2027-05-31', '', '', "Master's", 'Columbia', '', '3.9', '']);
   await page.close();
 });
 

@@ -3,7 +3,7 @@
 import { comboOptions, questionKey, verifyChecks, writeField } from './engine.mjs';
 import { SENSITIVE } from './model.mjs';
 
-const WAITS_FOR_USER = /^(follow_up|region_not_configured|no_rule|no_profile_value|no_exact_option|combobox_no_match|model_no_answer|model_option_not_exact|source_no_match)/;
+const WAITS_FOR_USER = /^(follow_up|region_not_configured|no_rule|no_profile_value|no_exact_option|combobox_no_match|model_no_answer|model_option_not_exact|source_no_match|undergraduate_no_match)/;
 // The profile does not store these secrets.
 export const NEVER_SAVED = /password|social security|\bssn\b/i;
 const MAX_ROUNDS = 3;
